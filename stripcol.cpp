@@ -19,6 +19,8 @@
 #include <iomanip>
 #include <random>
 #include <fstream>
+#include <queue>
+#include <variant>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "EuroScopePlugInDll.lib")
@@ -123,12 +125,20 @@ private:
 	std::unordered_set<std::string> transferToMeAircraft;
 	std::mutex transferMutex;
 
+	// Command Queue for Main Thread (Euroscope API is not thread-safe)
+	struct PendingTask {
+		std::string type;
+		std::string json;
+	};
+	std::queue<PendingTask> taskQueue;
+	std::mutex queueMutex;
+
 public:
 	StripCol()
 		: CPlugIn(
 			EuroScopePlugIn::COMPATIBILITY_CODE,
 			"StripCol",
-			"2.2",
+			"2.3",
 			"Simplezes",
 			"Copyright 2026") {
 		CheckGatewayAvailability();
@@ -272,14 +282,10 @@ private:
 		}
 
 		if (wsThread.joinable()) {
-			std::thread temp = std::move(wsThread);
-			std::thread([t = std::move(temp)]() mutable {
-				if (t.joinable())
-					t.join();
-				}).detach();
+			wsThread.join();
 		}
 
-		LogMessage("Gateway shutdown signal sent.");
+		LogMessage("Gateway shutdown complete.");
 	}
 
 	void WebSocketClientThread() {
@@ -581,6 +587,23 @@ private:
 
 			std::string type = message.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
 
+			// Queue the task for the main thread
+			{
+				std::lock_guard<std::mutex> lock(queueMutex);
+				taskQueue.push({ type, message });
+			}
+		}
+		catch (...) {
+			LogMessage("Error parsing command");
+		}
+	}
+
+	void ProcessPendingTasks() {
+		std::lock_guard<std::mutex> lock(queueMutex);
+		while (!taskQueue.empty()) {
+			PendingTask task = taskQueue.front();
+			taskQueue.pop();
+
 			static const std::unordered_map<std::string, void(StripCol::*)(const std::string&)> handlers = {
 				{"set-cleared-alt", &StripCol::HandleSetClearedAltitude},
 				{"set-assigned-heading", &StripCol::HandleSetAssignedHeading},
@@ -601,13 +624,15 @@ private:
 				{"get-nearby-aircraft", &StripCol::HandleGetNearbyAircraft}
 			};
 
-			auto it = handlers.find(type);
+			auto it = handlers.find(task.type);
 			if (it != handlers.end()) {
-				(this->*(it->second))(message);
+				try {
+					(this->*(it->second))(task.json);
+				}
+				catch (...) {
+					LogMessage("Exception in handler: " + task.type);
+				}
 			}
-		}
-		catch (...) {
-			LogMessage("Error parsing command");
 		}
 	}
 
@@ -1181,6 +1206,9 @@ public:
 	}
 
 	void OnTimer(int Counter) override {
+		// Process any commands from the background thread
+		ProcessPendingTasks();
+
 		if (wsConnected) {
 			CheckAllFlightPlans();
 
