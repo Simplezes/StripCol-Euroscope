@@ -7,6 +7,7 @@
 #include <ws2tcpip.h>
 #include <sstream>
 #include <unordered_set>
+#include <unordered_map>
 #include <mutex>
 #include <algorithm>
 #include <set>
@@ -127,9 +128,9 @@ public:
 		: CPlugIn(
 			EuroScopePlugIn::COMPATIBILITY_CODE,
 			"StripCol",
-			"2.1",
+			"2.2",
 			"Simplezes",
-			"Copyright 2025") {
+			"Copyright 2026") {
 		CheckGatewayAvailability();
 	}
 
@@ -580,56 +581,29 @@ private:
 
 			std::string type = message.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
 
-			if (type == "set-cleared-alt") {
-				HandleSetClearedAltitude(message);
-			}
-			else if (type == "set-assigned-heading") {
-				HandleSetAssignedHeading(message);
-			}
-			else if (type == "set-assigned-speed") {
-				HandleSetAssignedSpeed(message);
-			}
-			else if (type == "set-final-alt") {
-				HandleSetFinalAltitude(message);
-			}
-			else if (type == "accept-handoff") {
-				HandleAcceptHandoff(message);
-			}
-			else if (type == "end-tracking") {
-				HandleEndTracking(message);
-			}
-			else if (type == "set-squawk") {
-				HandleSetSquawk(message);
-			}
-			else if (type == "set-departureTime") {
-				HandleSetDepartureTime(message);
-			}
-			else if (type == "set-direct-point") {
-				HandleSetDirectPoint(message);
-			}
-			else if (type == "set-sid") {
-				HandleSetSid(message);
-			}
-			else if (type == "set-star") {
-				HandleSetStar(message);
-			}
-			else if (type == "set-assigned-mach") {
-				HandleSetAssignedMach(message);
-			}
-			else if (type == "refuse-handoff") {
-				HandleRefuseHandoff(message);
-			}
-			else if (type == "ATC-transfer") {
-				HandleAtcTransfer(message);
-			}
-			else if (type == "sync") {
-				HandleSync(message);
-			}
-			else if (type == "assume-aircraft") {
-				HandleAssumeAircraft(message);
-			}
-			else if (type == "get-nearby-aircraft") {
-				HandleGetNearbyAircraft(message);
+			static const std::unordered_map<std::string, void(StripCol::*)(const std::string&)> handlers = {
+				{"set-cleared-alt", &StripCol::HandleSetClearedAltitude},
+				{"set-assigned-heading", &StripCol::HandleSetAssignedHeading},
+				{"set-assigned-speed", &StripCol::HandleSetAssignedSpeed},
+				{"set-final-alt", &StripCol::HandleSetFinalAltitude},
+				{"accept-handoff", &StripCol::HandleAcceptHandoff},
+				{"end-tracking", &StripCol::HandleEndTracking},
+				{"set-squawk", &StripCol::HandleSetSquawk},
+				{"set-departureTime", &StripCol::HandleSetDepartureTime},
+				{"set-direct-point", &StripCol::HandleSetDirectPoint},
+				{"set-sid", &StripCol::HandleSetSid},
+				{"set-star", &StripCol::HandleSetStar},
+				{"set-assigned-mach", &StripCol::HandleSetAssignedMach},
+				{"refuse-handoff", &StripCol::HandleRefuseHandoff},
+				{"ATC-transfer", &StripCol::HandleAtcTransfer},
+				{"sync", &StripCol::HandleSync},
+				{"assume-aircraft", &StripCol::HandleAssumeAircraft},
+				{"get-nearby-aircraft", &StripCol::HandleGetNearbyAircraft}
+			};
+
+			auto it = handlers.find(type);
+			if (it != handlers.end()) {
+				(this->*(it->second))(message);
 			}
 		}
 		catch (...) {
