@@ -21,6 +21,9 @@
 #include <fstream>
 #include <queue>
 #include <variant>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "EuroScopePlugInDll.lib")
@@ -28,71 +31,6 @@
 using namespace EuroScopePlugIn;
 static CRadarScreen* g_pScreen = nullptr;
 
-// ==================== HELPER CLASSES ====================
-
-class JsonBuilder {
-private:
-	std::ostringstream ss;
-	bool first = true;
-
-public:
-	JsonBuilder() { ss << "{"; }
-
-	static std::string Escape(const std::string& str) {
-		std::string result;
-		result.reserve(static_cast<size_t>(str.length() * 1.1));
-		for (char c : str) {
-			switch (c) {
-			case '"':  result += "\\\""; break;
-			case '\\': result += "\\\\"; break;
-			case '\b': result += "\\b"; break;
-			case '\f': result += "\\f"; break;
-			case '\n': result += "\\n"; break;
-			case '\r': result += "\\r"; break;
-			case '\t': result += "\\t"; break;
-			default:
-				if (static_cast<unsigned char>(c) < 0x20 || c == 0x7F) {
-					char buf[7];
-					snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
-					result += buf;
-				}
-				else result += c;
-			}
-		}
-		return result;
-	}
-
-	void Add(const std::string& key, const std::string& value) {
-		if (!first) ss << ",";
-		ss << "\"" << key << "\":\"" << Escape(value) << "\"";
-		first = false;
-	}
-
-	void Add(const std::string& key, int value) {
-		if (!first) ss << ",";
-		ss << "\"" << key << "\":" << value;
-		first = false;
-	}
-
-	void Add(const std::string& key, double value, int precision = 2) {
-		if (!first) ss << ",";
-		ss << "\"" << key << "\":" << std::fixed << std::setprecision(precision) << value;
-		ss.unsetf(std::ios_base::fixed);
-		ss << std::setprecision(6);
-		first = false;
-	}
-
-	void AddRaw(const std::string& key, const std::string& rawJson) {
-		if (!first) ss << ",";
-		ss << "\"" << key << "\":" << rawJson;
-		first = false;
-	}
-
-	std::string Build() {
-		ss << "}";
-		return ss.str();
-	}
-};
 
 // ==================== MAIN PLUGIN CLASS ====================
 
@@ -106,6 +44,8 @@ private:
 	std::mutex wsMutex;
 	std::mutex gatewayMutex;
 	std::string gatewayAddress = "127.0.0.1";
+	std::atomic<bool> connectionRequested{ false };
+	std::mutex connectionMutex;
 
 	// Pairing code
 	std::string pairingCode;
@@ -222,6 +162,11 @@ private:
 	}
 
 	void ConnectToGateway() {
+		{
+			std::lock_guard<std::mutex> connLock(connectionMutex);
+			if (running) return;
+		}
+
 		LogMessage("ConnectToGateway: Preparing fresh connection...");
 		DisconnectFromGateway();
 
@@ -233,9 +178,8 @@ private:
 
 		CController myself = ControllerMyself();
 		if (myself.IsValid()) {
-
-			JsonBuilder json;
-			json.Add("type", "register");
+			json j;
+			j["type"] = "register";
 
 			{
 				std::lock_guard<std::mutex> lock(codeMutex);
@@ -244,20 +188,20 @@ private:
 					std::string message = "StripCol Pairing Code: " + pairingCode;
 					DisplayUserMessage("StripCol", "Pairing", message.c_str(), true, true, false, false, false);
 				}
-				json.Add("code", pairingCode);
+				j["code"] = pairingCode;
 			}
 
-			json.Add("callsign", myself.GetCallsign());
-			json.Add("name", myself.GetFullName());
-			json.Add("facility", myself.GetFacility());
-			json.Add("rating", myself.GetRating());
-			json.Add("positionId", myself.GetPositionId());
+			j["callsign"] = myself.GetCallsign();
+			j["name"] = myself.GetFullName();
+			j["facility"] = myself.GetFacility();
+			j["rating"] = myself.GetRating();
+			j["positionId"] = myself.GetPositionId();
 
 			char freqStr[16];
 			snprintf(freqStr, sizeof(freqStr), "%.3f", myself.GetPrimaryFrequency());
-			json.Add("frequency", freqStr);
+			j["frequency"] = freqStr;
 
-			registrationMessage = json.Build();
+			registrationMessage = j.dump();
 		}
 
 		running = true;
@@ -573,28 +517,18 @@ private:
 
 	void HandleCommand(const std::string& message) {
 		try {
-			size_t typePos = message.find("\"type\"");
-			if (typePos == std::string::npos) return;
-
-			size_t colonPos = message.find(':', typePos);
-			if (colonPos == std::string::npos) return;
-
-			size_t quoteStart = message.find('"', colonPos);
-			if (quoteStart == std::string::npos) return;
-
-			size_t quoteEnd = message.find('"', quoteStart + 1);
-			if (quoteEnd == std::string::npos) return;
-
-			std::string type = message.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
-
-			// Queue the task for the main thread
-			{
+			auto j = json::parse(message);
+			if (j.contains("type") && j["type"].is_string()) {
+				std::string type = j["type"];
 				std::lock_guard<std::mutex> lock(queueMutex);
 				taskQueue.push({ type, message });
 			}
 		}
+		catch (const json::parse_error& e) {
+			LogMessage("JSON parse error: " + std::string(e.what()));
+		}
 		catch (...) {
-			LogMessage("Error parsing command");
+			LogMessage("Error handling command");
 		}
 	}
 
@@ -636,27 +570,23 @@ private:
 		}
 	}
 
-	std::string GetJsonValue(const std::string& json, const std::string& key) {
-		size_t keyPos = json.find("\"" + key + "\"");
-		if (keyPos == std::string::npos) return "";
-
-		size_t colonPos = json.find(':', keyPos);
-		if (colonPos == std::string::npos) return "";
-
-		size_t valueStart = json.find('"', colonPos);
-		if (valueStart == std::string::npos) return "";
-
-		size_t valueEnd = json.find('"', valueStart + 1);
-		if (valueEnd == std::string::npos) return "";
-
-		return json.substr(valueStart + 1, valueEnd - valueStart - 1);
+	std::string GetJsonValue(const std::string& jsonStr, const std::string& key) {
+		try {
+			auto j = json::parse(jsonStr);
+			if (j.contains(key)) {
+				if (j[key].is_string()) return j[key];
+				if (j[key].is_number()) return std::to_string(j[key].get<double>());
+			}
+		}
+		catch (...) {}
+		return "";
 	}
 
 	// ==================== COMMAND HANDLERS ====================
 
-	void HandleSetClearedAltitude(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string altStr = GetJsonValue(json, "clearedAltitude");
+	void HandleSetClearedAltitude(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string altStr = GetJsonValue(jsonStr, "clearedAltitude");
 
 		if (callsign.empty() || altStr.empty()) return;
 
@@ -670,9 +600,9 @@ private:
 		catch (...) {}
 	}
 
-	void HandleSetAssignedHeading(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string headingStr = GetJsonValue(json, "assignedHeading");
+	void HandleSetAssignedHeading(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string headingStr = GetJsonValue(jsonStr, "assignedHeading");
 
 		if (callsign.empty() || headingStr.empty()) return;
 
@@ -686,9 +616,9 @@ private:
 		catch (...) {}
 	}
 
-	void HandleSetAssignedSpeed(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string speedStr = GetJsonValue(json, "assignedSpeed");
+	void HandleSetAssignedSpeed(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string speedStr = GetJsonValue(jsonStr, "assignedSpeed");
 
 		if (callsign.empty() || speedStr.empty()) return;
 
@@ -704,9 +634,9 @@ private:
 		catch (...) {}
 	}
 
-	void HandleSetFinalAltitude(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string altStr = GetJsonValue(json, "finalAltitude");
+	void HandleSetFinalAltitude(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string altStr = GetJsonValue(jsonStr, "finalAltitude");
 
 		if (callsign.empty() || altStr.empty()) return;
 
@@ -720,8 +650,8 @@ private:
 		catch (...) {}
 	}
 
-	void HandleAcceptHandoff(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
+	void HandleAcceptHandoff(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
 		if (callsign.empty()) return;
 
 		CFlightPlan fp = FlightPlanSelect(callsign.c_str());
@@ -745,15 +675,15 @@ private:
 			lastAircraftData.erase(callsign);
 		}
 
-		JsonBuilder json;
-		json.Add("type", "release");
-		json.Add("callsign", callsign);
-		SendWebSocketMessage(json.Build());
+		json j;
+		j["type"] = "release";
+		j["callsign"] = callsign;
+		SendWebSocketMessage(j.dump());
 	}
 
-	void HandleSetSquawk(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string squawkStr = GetJsonValue(json, "squawk");
+	void HandleSetSquawk(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string squawkStr = GetJsonValue(jsonStr, "squawk");
 
 		if (callsign.empty() || squawkStr.empty()) return;
 
@@ -763,9 +693,9 @@ private:
 		}
 	}
 
-	void HandleSetDepartureTime(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string dTimeStr = GetJsonValue(json, "Dtime");
+	void HandleSetDepartureTime(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string dTimeStr = GetJsonValue(jsonStr, "Dtime");
 
 		if (callsign.empty() || dTimeStr.empty()) return;
 
@@ -775,9 +705,9 @@ private:
 		}
 	}
 
-	void HandleSetAssignedMach(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string machStr = GetJsonValue(json, "assignedMach");
+	void HandleSetAssignedMach(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string machStr = GetJsonValue(jsonStr, "assignedMach");
 
 		if (callsign.empty() || machStr.empty()) return;
 
@@ -792,9 +722,9 @@ private:
 		catch (...) {}
 	}
 
-	void HandleSetDirectPoint(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string pointName = GetJsonValue(json, "pointName");
+	void HandleSetDirectPoint(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string pointName = GetJsonValue(jsonStr, "pointName");
 
 		if (callsign.empty() || pointName.empty()) return;
 
@@ -811,10 +741,10 @@ private:
 		}
 	}
 
-	void HandleSetSid(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string sid = GetJsonValue(json, "sid");
-		std::string runway = GetJsonValue(json, "runway");
+	void HandleSetSid(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string sid = GetJsonValue(jsonStr, "sid");
+		std::string runway = GetJsonValue(jsonStr, "runway");
 
 		if (callsign.empty() || sid.empty()) return;
 
@@ -822,10 +752,10 @@ private:
 		SetSidForFlight(callsign, sid, runway, msg);
 	}
 
-	void HandleSetStar(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string star = GetJsonValue(json, "star");
-		std::string runway = GetJsonValue(json, "runway");
+	void HandleSetStar(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string star = GetJsonValue(jsonStr, "star");
+		std::string runway = GetJsonValue(jsonStr, "runway");
 
 		if (callsign.empty() || star.empty()) return;
 
@@ -833,8 +763,8 @@ private:
 		SetStarForFlight(callsign, star, runway, msg);
 	}
 
-	void HandleRefuseHandoff(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
+	void HandleRefuseHandoff(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
 		if (callsign.empty()) return;
 
 		CFlightPlan fp = FlightPlanSelect(callsign.c_str());
@@ -843,9 +773,9 @@ private:
 		}
 	}
 
-	void HandleAtcTransfer(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
-		std::string targetATC = GetJsonValue(json, "targetATC");
+	void HandleAtcTransfer(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
+		std::string targetATC = GetJsonValue(jsonStr, "targetATC");
 
 		if (callsign.empty() || targetATC.empty()) return;
 
@@ -855,8 +785,8 @@ private:
 		}
 	}
 
-	void HandleAssumeAircraft(const std::string& json) {
-		std::string callsign = GetJsonValue(json, "callsign");
+	void HandleAssumeAircraft(const std::string& jsonStr) {
+		std::string callsign = GetJsonValue(jsonStr, "callsign");
 		if (callsign.empty()) return;
 
 		CFlightPlan fp = FlightPlanSelect(callsign.c_str());
@@ -867,7 +797,7 @@ private:
 		}
 	}
 
-	void HandleGetNearbyAircraft(const std::string& json) {
+	void HandleGetNearbyAircraft(const std::string& jsonStr) {
 		std::vector<std::string> callsigns;
 		CController myself = ControllerMyself();
 		if (!myself.IsValid()) return;
@@ -890,19 +820,15 @@ private:
 			fp = FlightPlanSelectNext(fp);
 		}
 
-		std::ostringstream ss;
-		ss << "{\"type\":\"nearby-aircraft\",\"data\":[";
-		for (size_t i = 0; i < callsigns.size(); ++i) {
-			ss << "\"" << JsonBuilder::Escape(callsigns[i]) << "\"";
-			if (i < callsigns.size() - 1) ss << ",";
-		}
-		ss << "]}";
-		SendWebSocketMessage(ss.str());
+		json root;
+		root["type"] = "nearby-aircraft";
+		root["data"] = callsigns;
+		SendWebSocketMessage(root.dump());
 	}
 
 
 
-	void HandleSync(const std::string& json) {
+	void HandleSync(const std::string& jsonStr) {
 		SendRegistration();
 
 		lastAtcListJson = "";
@@ -914,41 +840,39 @@ private:
 			CFlightPlan fp = FlightPlanSelect(callsign.c_str());
 			if (fp.IsValid()) {
 				std::string acJson = BuildAircraftJson(fp);
-				JsonBuilder update;
-				update.Add("type", "aircraft");
-				update.AddRaw("data", acJson);
-				SendWebSocketMessage(update.Build());
+				json update;
+				update["type"] = "aircraft";
+				update["data"] = json::parse(acJson);
+				SendWebSocketMessage(update.dump());
 				lastAircraftData[callsign] = acJson;
 			}
 		}
 	}
 
 	void SendAtcList(bool force = false) {
-		std::ostringstream ss;
-		ss << "{\"type\":\"atclist\",\"data\":[";
-		bool first = true;
+		json data = json::array();
 
 		CController ctrl = ControllerSelectFirst();
 		while (ctrl.IsValid()) {
-			if (!first) ss << ",";
-			first = false;
-
 			double freq = ctrl.GetPrimaryFrequency();
 			char freqBuf[16];
 			snprintf(freqBuf, sizeof(freqBuf), "%.3f", freq);
 
-			JsonBuilder j;
-			j.Add("callsign", ctrl.GetCallsign());
-			j.Add("positionId", ctrl.GetPositionId());
-			j.Add("fullName", ctrl.GetFullName());
-			j.Add("rating", ctrl.GetRating());
-			j.Add("frequency", freqBuf);
-			ss << j.Build();
+			json j;
+			j["callsign"] = ctrl.GetCallsign();
+			j["positionId"] = ctrl.GetPositionId();
+			j["fullName"] = ctrl.GetFullName();
+			j["rating"] = ctrl.GetRating();
+			j["frequency"] = freqBuf;
+			data.push_back(j);
 
 			ctrl = ControllerSelectNext(ctrl);
 		}
-		ss << "]}";
-		std::string finalJson = ss.str();
+
+		json root;
+		root["type"] = "atclist";
+		root["data"] = data;
+		std::string finalJson = root.dump();
 
 		if (force || finalJson != lastAtcListJson) {
 			SendWebSocketMessage(finalJson);
@@ -1072,10 +996,10 @@ private:
 		if (isTransferring && !inSet) {
 			transferToMeAircraft.insert(callsign);
 
-			JsonBuilder json;
-			json.Add("type", "transfer");
-			json.AddRaw("data", BuildAircraftJson(fp));
-			SendWebSocketMessage(json.Build());
+			json j;
+			j["type"] = "transfer";
+			j["data"] = json::parse(BuildAircraftJson(fp));
+			SendWebSocketMessage(j.dump());
 		}
 		else if (!isTransferring && inSet) {
 			transferToMeAircraft.erase(callsign);
@@ -1090,20 +1014,32 @@ private:
 		if (isAssumed && !inSet) {
 			assumedAircraft.insert(callsign);
 
-			JsonBuilder json;
-			json.Add("type", "aircraft");
-			json.AddRaw("data", BuildAircraftJson(fp));
-			SendWebSocketMessage(json.Build());
+			std::string acJson = BuildAircraftJson(fp);
+			json j;
+			j["type"] = "aircraft";
+			j["data"] = json::parse(acJson);
+			SendWebSocketMessage(j.dump());
+			lastAircraftData[callsign] = acJson;
 		}
 		else if (!isAssumed && inSet) {
 			assumedAircraft.erase(callsign);
 
-			JsonBuilder json;
-			json.Add("type", "release");
-			json.Add("callsign", callsign);
-			SendWebSocketMessage(json.Build());
+			json j;
+			j["type"] = "release";
+			j["callsign"] = callsign;
+			SendWebSocketMessage(j.dump());
 
 			lastAircraftData.erase(callsign);
+		}
+		else if (isAssumed && inSet) {
+			std::string acJson = BuildAircraftJson(fp);
+			if (acJson != lastAircraftData[callsign]) {
+				json j;
+				j["type"] = "fpupdate";
+				j["data"] = json::parse(acJson);
+				SendWebSocketMessage(j.dump());
+				lastAircraftData[callsign] = acJson;
+			}
 		}
 	}
 
@@ -1120,80 +1056,102 @@ private:
 		auto assignedData = fp.GetControllerAssignedData();
 		auto route = fp.GetExtractedRoute();
 
-		JsonBuilder json;
-		json.Add("callsign", fp.GetCallsign());
-		json.Add("aircraftType", data.GetAircraftFPType());
-		json.Add("groundSpeed", data.GetTrueAirspeed());
-		json.Add("departure", data.GetOrigin());
-		json.Add("arrival", data.GetDestination());
-		json.Add("squawk", assignedData.GetSquawk());
-		json.Add("atd", data.GetActualDepartureTime());
-		json.Add("sid", data.GetSidName());
-		json.Add("star", data.GetStarName());
-		json.Add("departureRwy", data.GetDepartureRwy());
-		json.Add("arrivalRwy", data.GetArrivalRwy());
-		json.Add("finalAltitude", fp.GetFinalAltitude());
-		json.Add("directTo", assignedData.GetDirectToPointName());
-		json.Add("route", data.GetRoute());
-		json.Add("remarks", data.GetRemarks());
-		json.Add("groundState", fp.GetGroundState());
-		json.Add("clearedFlag", fp.GetClearenceFlag() ? 1 : 0);
+		json j;
+		j["callsign"] = fp.GetCallsign();
+		j["aircraftType"] = data.GetAircraftFPType() ? data.GetAircraftFPType() : "";
+		j["groundSpeed"] = data.GetTrueAirspeed();
+		j["departure"] = data.GetOrigin() ? data.GetOrigin() : "";
+		j["arrival"] = data.GetDestination() ? data.GetDestination() : "";
+		j["squawk"] = assignedData.GetSquawk() ? assignedData.GetSquawk() : "";
+		j["atd"] = data.GetActualDepartureTime() ? data.GetActualDepartureTime() : "";
+		j["sid"] = data.GetSidName() ? data.GetSidName() : "";
+		j["star"] = data.GetStarName() ? data.GetStarName() : "";
+		j["departureRwy"] = data.GetDepartureRwy() ? data.GetDepartureRwy() : "";
+		j["arrivalRwy"] = data.GetArrivalRwy() ? data.GetArrivalRwy() : "";
+		j["finalAltitude"] = fp.GetFinalAltitude();
+		j["directTo"] = assignedData.GetDirectToPointName() ? assignedData.GetDirectToPointName() : "";
+		j["route"] = data.GetRoute() ? data.GetRoute() : "";
+		j["remarks"] = data.GetRemarks() ? data.GetRemarks() : "";
+		j["groundState"] = fp.GetGroundState();
+		j["clearedFlag"] = fp.GetClearenceFlag() ? 1 : 0;
 
-		auto isNotificationPoint = [](const char* name) {
-			if (!name) return false;
-			for (const char* p = name; *p; ++p) if (isdigit(*p)) return false;
-			return true;
-			};
+		const char* origin = data.GetOrigin();
+		const char* destination = data.GetDestination();
 
-		auto formatPointsJson = [&](int start, int end, int step, bool reverse) {
-			std::vector<std::pair<std::string, int>> points;
-			for (int i = start; (step > 0 ? i < end : i > end) && points.size() < 5; i += step) {
-				const char* name = route.GetPointName(i);
-				if (isNotificationPoint(name)) points.emplace_back(name, route.GetPointDistanceInMinutes(i));
+		auto isNotificationPoint = [&](const char* name) {
+			if (!name || strlen(name) <= 1) return false;
+			if (origin && strcmp(name, origin) == 0) return false;
+			if (destination && strcmp(name, destination) == 0) return false;
+
+			for (const char* p = name; *p; ++p) {
+				if (isdigit((unsigned char)*p)) return false;
 			}
-			if (reverse) std::reverse(points.begin(), points.end());
+			return true;
+		};
 
-			std::ostringstream ss;
-			ss << "[";
+		auto getPointsList = [&](const std::vector<std::pair<std::string, int>>& points) {
+			json arr = json::array();
 			time_t now = time(nullptr);
-			for (size_t i = 0; i < points.size(); ++i) {
-				if (i > 0) ss << ",";
-				int totalMinutes = (int)((now / 60) % 1440) + points[i].second;
+			for (const auto& p : points) {
+				int totalMinutes = (int)((now / 60) % 1440) + p.second;
 				char timeStr[8];
 				snprintf(timeStr, sizeof(timeStr), "%02d%02d", (totalMinutes / 60) % 24, totalMinutes % 60);
-				ss << "{\"name\":\"" << JsonBuilder::Escape(points[i].first) << "\",\"eta\":\"" << timeStr << "\"}";
+				
+				json point;
+				point["name"] = p.first;
+				point["eta"] = timeStr;
+				arr.push_back(point);
 			}
-			ss << "]";
-			return ss.str();
-			};
+			return arr;
+		};
 
-		int depIdx = -1, arrIdx = -1;
-		for (int i = 0; i < route.GetPointsNumber(); i++) {
+		int pointsCount = route.GetPointsNumber();
+		int originIdx = -1, destIdx = -1;
+
+		for (int i = 0; i < pointsCount; i++) {
 			const char* name = route.GetPointName(i);
-			if (name && strlen(name) == 4) {
-				if (depIdx == -1) depIdx = i; else arrIdx = i;
+			if (name) {
+				if (originIdx == -1 && origin && strcmp(name, origin) == 0) originIdx = i;
+				if (destination && strcmp(name, destination) == 0) destIdx = i;
 			}
 		}
 
-		if (depIdx != -1 && arrIdx != -1) {
-			json.AddRaw("departurePoints", formatPointsJson(depIdx + 1, arrIdx, 1, false));
-			json.AddRaw("arrivalPoints", formatPointsJson(arrIdx - 1, -1, -1, true));
-		}
-		else {
-			json.AddRaw("departurePoints", "[]");
-			json.AddRaw("arrivalPoints", "[]");
+		if (originIdx == -1) originIdx = 0;
+		if (destIdx == -1) destIdx = pointsCount - 1;
+
+		std::vector<std::pair<std::string, int>> upcomingPoints;
+		for (int i = 0; i < pointsCount && upcomingPoints.size() < 5; i++) {
+			int minutes = route.GetPointDistanceInMinutes(i);
+			if (minutes >= 0) {
+				const char* name = route.GetPointName(i);
+				if (isNotificationPoint(name)) {
+					upcomingPoints.emplace_back(name, minutes);
+				}
+			}
 		}
 
-		json.Add("clearedAltitude", assignedData.GetClearedAltitude());
-		json.Add("assignedHeading", assignedData.GetAssignedHeading());
-		json.Add("assignedMach", assignedData.GetAssignedMach() / 100.0);
-		json.Add("assignedSpeed", assignedData.GetAssignedSpeed());
-		json.Add("entryPoint", fp.GetEntryCoordinationPointName());
-		json.Add("exitPoint", fp.GetExitCoordinationPointName());
-		json.Add("nextCopxPoint", fp.GetNextCopxPointName());
-		json.Add("nextFirCopxPoint", fp.GetNextFirCopxPointName());
+		std::vector<std::pair<std::string, int>> arrivalPoints;
+		for (int i = destIdx - 1; i > originIdx && arrivalPoints.size() < 5; i--) {
+			const char* name = route.GetPointName(i);
+			if (isNotificationPoint(name)) {
+				arrivalPoints.emplace_back(name, route.GetPointDistanceInMinutes(i));
+			}
+		}
+		std::reverse(arrivalPoints.begin(), arrivalPoints.end());
 
-		return json.Build();
+		j["departurePoints"] = getPointsList(upcomingPoints);
+		j["arrivalPoints"] = getPointsList(arrivalPoints);
+
+		j["clearedAltitude"] = assignedData.GetClearedAltitude();
+		j["assignedHeading"] = assignedData.GetAssignedHeading();
+		j["assignedMach"] = assignedData.GetAssignedMach() / 100.0;
+		j["assignedSpeed"] = assignedData.GetAssignedSpeed();
+		j["entryPoint"] = fp.GetEntryCoordinationPointName() ? fp.GetEntryCoordinationPointName() : "";
+		j["exitPoint"] = fp.GetExitCoordinationPointName() ? fp.GetExitCoordinationPointName() : "";
+		j["nextCopxPoint"] = fp.GetNextCopxPointName() ? fp.GetNextCopxPointName() : "";
+		j["nextFirCopxPoint"] = fp.GetNextFirCopxPointName() ? fp.GetNextFirCopxPointName() : "";
+
+		return j.dump();
 	}
 
 public:
@@ -1202,17 +1160,20 @@ public:
 	}
 
 	void OnControllerPositionUpdate(CController Controller) override {
-		ConnectToGateway();
+		connectionRequested = true;
 	}
 
 	void OnTimer(int Counter) override {
-		// Process any commands from the background thread
+		if (connectionRequested && !running) {
+			connectionRequested = false;
+			ConnectToGateway();
+		}
+
 		ProcessPendingTasks();
 
 		if (wsConnected) {
 			CheckAllFlightPlans();
 
-			// Push ATC list every 30 seconds
 			if (Counter % 30 == 0) {
 				SendAtcList();
 			}
@@ -1220,9 +1181,13 @@ public:
 	}
 
 	void OnControllerDisconnect(CController Controller) override {
+		LogMessage("Controller disconnected, stopping plugin...");
+		DisconnectFromGateway();
+
 		{
 			std::lock_guard<std::mutex> lock(aircraftMutex);
 			assumedAircraft.clear();
+			lastAircraftData.clear();
 		}
 	}
 
@@ -1240,10 +1205,10 @@ public:
 
 			std::lock_guard<std::mutex> lock2(aircraftMutex);
 			if (acJson != lastAircraftData[callsign]) {
-				JsonBuilder json;
-				json.Add("type", "fpupdate");
-				json.AddRaw("data", acJson);
-				SendWebSocketMessage(json.Build());
+				json j;
+				j["type"] = "fpupdate";
+				j["data"] = json::parse(acJson);
+				SendWebSocketMessage(j.dump());
 				lastAircraftData[callsign] = acJson;
 			}
 		}
@@ -1258,10 +1223,10 @@ public:
 
 			std::lock_guard<std::mutex> lock2(aircraftMutex);
 			if (acJson != lastAircraftData[callsign]) {
-				JsonBuilder json;
-				json.Add("type", "fpupdate");
-				json.AddRaw("data", acJson);
-				SendWebSocketMessage(json.Build());
+				json j;
+				j["type"] = "fpupdate";
+				j["data"] = json::parse(acJson);
+				SendWebSocketMessage(j.dump());
 				lastAircraftData[callsign] = acJson;
 			}
 		}
@@ -1272,10 +1237,10 @@ public:
 
 		if (fp.GetState() == EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED) {
 			std::string callsign = fp.GetCallsign();
-			JsonBuilder json;
-			json.Add("type", "release");
-			json.Add("callsign", callsign);
-			SendWebSocketMessage(json.Build());
+			json j;
+			j["type"] = "release";
+			j["callsign"] = callsign;
+			SendWebSocketMessage(j.dump());
 
 			std::lock_guard<std::mutex> lock2(aircraftMutex);
 			lastAircraftData.erase(callsign);
