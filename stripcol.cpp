@@ -7,8 +7,6 @@
 
 using namespace EuroScopePlugIn;
 
-static CRadarScreen* g_pScreen = nullptr;
-
 StripCol::StripCol()
     : CPlugIn(EuroScopePlugIn::COMPATIBILITY_CODE, 
               StripColConstants::PLUGIN_NAME.c_str(), 
@@ -456,10 +454,6 @@ void StripCol::HandleAssumedState(CFlightPlan& fp, const std::string& callsign, 
 }
 
 // Event Handlers
-void StripCol::OnRadarScreenCreated(CRadarScreen* pRadarScreen) {
-    g_pScreen = pRadarScreen;
-}
-
 void StripCol::OnControllerPositionUpdate(CController Controller) {
     connectionRequested = true;
 }

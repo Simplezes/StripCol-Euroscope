@@ -47,7 +47,7 @@ public:
 
     // EuroScope Overrides
     void OnTimer(int Counter) override;
-    void OnRadarScreenCreated(EuroScopePlugIn::CRadarScreen* pRadarScreen) override;
+
     void OnControllerPositionUpdate(EuroScopePlugIn::CController Controller) override;
     void OnControllerDisconnect(EuroScopePlugIn::CController Controller) override;
     void OnFlightPlanFlightPlanDataUpdate(EuroScopePlugIn::CFlightPlan fp) override;
