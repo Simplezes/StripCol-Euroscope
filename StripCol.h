@@ -12,6 +12,11 @@
 
 using json = nlohmann::json;
 
+// Custom Tag IDs
+const int TAG_ITEM_SIMULATED_CLEARANCE = 101;
+const int TAG_FUNC_TOGGLE_CLEARANCE = 101;
+
+
 class StripCol : public EuroScopePlugIn::CPlugIn {
 private:
     // WebSocket Client
@@ -32,6 +37,11 @@ private:
 
     std::unordered_set<std::string> transferToMeAircraft;
     std::mutex transferMutex;
+
+    // Simulated Clearance Flags
+    std::unordered_map<std::string, bool> customClearanceFlags;
+    std::mutex clearanceMutex;
+
 
     // Command Queue
     struct PendingTask {
@@ -55,12 +65,30 @@ public:
     void OnFlightPlanDisconnect(EuroScopePlugIn::CFlightPlan fp) override;
     bool OnCompileCommand(const char* sCommandLine) override;
 
+    // Custom Tag Handlers
+    void OnGetTagItem(EuroScopePlugIn::CFlightPlan FlightPlan,
+        EuroScopePlugIn::CRadarTarget RadarTarget,
+        int ItemCode,
+        int TagData,
+        char sItemString[16],
+        int* pColorCode,
+        COLORREF* pRGB,
+        double* pFontSize) override;
+
+    void OnFunctionCall(int FunctionId,
+        const char* sItemString,
+        POINT Pt,
+        RECT Area) override;
+
+
 private:
     void ConnectToGateway();
     void DisconnectFromGateway();
     void HandleWebSocketMessage(const std::string& message);
     void ProcessPendingTasks();
+    bool GetCustomClearance(const std::string& callsign);
     void SendRegistration();
+
     void SendAtcList(bool force = false);
     void CheckAllFlightPlans();
     
@@ -85,6 +113,8 @@ private:
     void HandleSync(const std::string& jsonStr);
     void HandleAssumeAircraft(const std::string& jsonStr);
     void HandleGetNearbyAircraft(const std::string& jsonStr);
+    void HandleSetClearance(const std::string& jsonStr);
+
 
     std::string GetJsonValue(const std::string& jsonStr, const std::string& key);
 };

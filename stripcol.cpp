@@ -22,6 +22,9 @@ StripCol::StripCol()
     } else {
         Utils::LogMessage("Gateway not available - will retry on position connect");
     }
+
+    RegisterTagItemType("Simulated Clearance", TAG_ITEM_SIMULATED_CLEARANCE);
+    RegisterTagItemFunction("Toggle Clearance", TAG_FUNC_TOGGLE_CLEARANCE);
 }
 
 StripCol::~StripCol() {
@@ -107,7 +110,8 @@ void StripCol::ProcessPendingTasks() {
             {"ATC-transfer", &StripCol::HandleAtcTransfer},
             {"sync", &StripCol::HandleSync},
             {"assume-aircraft", &StripCol::HandleAssumeAircraft},
-            {"get-nearby-aircraft", &StripCol::HandleGetNearbyAircraft}
+            {"get-nearby-aircraft", &StripCol::HandleGetNearbyAircraft},
+            {"set-clearance", &StripCol::HandleSetClearance}
         };
 
         auto it = handlers.find(task.type);
@@ -127,10 +131,20 @@ std::string StripCol::GetJsonValue(const std::string& jsonStr, const std::string
         if (j.contains(key)) {
             if (j[key].is_string()) return j[key];
             if (j[key].is_number()) return std::to_string(j[key].get<double>());
+            if (j[key].is_boolean()) return j[key].get<bool>() ? "true" : "false";
         }
     } catch (...) {}
     return "";
 }
+
+bool StripCol::GetCustomClearance(const std::string& callsign) {
+    std::lock_guard<std::mutex> lock(clearanceMutex);
+    if (customClearanceFlags.count(callsign)) {
+        return customClearanceFlags[callsign];
+    }
+    return false;
+}
+
 
 // Command Handlers Implementation
 void StripCol::HandleSetClearedAltitude(const std::string& jsonStr) {
@@ -300,6 +314,23 @@ void StripCol::HandleAssumeAircraft(const std::string& jsonStr) {
     }
 }
 
+void StripCol::HandleSetClearance(const std::string& jsonStr) {
+    std::string callsign = GetJsonValue(jsonStr, "callsign");
+    std::string clearedStr = GetJsonValue(jsonStr, "cleared");
+    if (callsign.empty() || clearedStr.empty()) return;
+
+    bool cleared = (clearedStr == "true" || clearedStr == "1");
+
+    {
+        std::lock_guard<std::mutex> lock(clearanceMutex);
+        customClearanceFlags[callsign] = cleared;
+    }
+
+    CFlightPlan fp = FlightPlanSelect(callsign.c_str());
+    if (fp.IsValid()) {
+    }
+}
+
 void StripCol::HandleGetNearbyAircraft(const std::string& jsonStr) {
     std::vector<std::string> callsigns;
     CController myself = ControllerMyself();
@@ -354,10 +385,11 @@ void StripCol::HandleSync(const std::string& jsonStr) {
     for (const auto& callsign : assumedAircraft) {
         CFlightPlan fp = FlightPlanSelect(callsign.c_str());
         if (fp.IsValid()) {
-            std::string acJson = FlightPlanManager::BuildAircraftJson(fp);
+            std::string acJson = FlightPlanManager::BuildAircraftJson(fp, GetCustomClearance(callsign));
             json update;
             update["type"] = "aircraft";
             update["data"] = json::parse(acJson);
+
             wsClient->SendMessage(update.dump());
             lastAircraftData[callsign] = acJson;
         }
@@ -414,9 +446,10 @@ void StripCol::HandleTransferState(CFlightPlan& fp, const std::string& callsign,
         transferToMeAircraft.insert(callsign);
         json j;
         j["type"] = "transfer";
-        j["data"] = json::parse(FlightPlanManager::BuildAircraftJson(fp));
+        j["data"] = json::parse(FlightPlanManager::BuildAircraftJson(fp, GetCustomClearance(callsign)));
         wsClient->SendMessage(j.dump());
     } else if (!isTransferring && inSet) {
+
         transferToMeAircraft.erase(callsign);
     }
 }
@@ -428,10 +461,11 @@ void StripCol::HandleAssumedState(CFlightPlan& fp, const std::string& callsign, 
 
     if (isAssumed && !inSet) {
         assumedAircraft.insert(callsign);
-        std::string acJson = FlightPlanManager::BuildAircraftJson(fp);
+        std::string acJson = FlightPlanManager::BuildAircraftJson(fp, GetCustomClearance(callsign));
         json j;
         j["type"] = "aircraft";
         j["data"] = json::parse(acJson);
+
         wsClient->SendMessage(j.dump());
         lastAircraftData[callsign] = acJson;
     } else if (!isAssumed && inSet) {
@@ -442,9 +476,10 @@ void StripCol::HandleAssumedState(CFlightPlan& fp, const std::string& callsign, 
         wsClient->SendMessage(j.dump());
         lastAircraftData.erase(callsign);
     } else if (isAssumed && inSet) {
-        std::string acJson = FlightPlanManager::BuildAircraftJson(fp);
+        std::string acJson = FlightPlanManager::BuildAircraftJson(fp, GetCustomClearance(callsign));
         if (acJson != lastAircraftData[callsign]) {
             json j;
+
             j["type"] = "fpupdate";
             j["data"] = json::parse(acJson);
             wsClient->SendMessage(j.dump());
@@ -494,8 +529,9 @@ void StripCol::OnFlightPlanControllerAssignedDataUpdate(CFlightPlan fp, int Data
     if (!fp.IsValid() || !wsClient->IsConnected()) return;
     if (fp.GetState() == EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED) {
         std::string callsign = fp.GetCallsign();
-        std::string acJson = FlightPlanManager::BuildAircraftJson(fp);
+        std::string acJson = FlightPlanManager::BuildAircraftJson(fp, GetCustomClearance(callsign));
         std::lock_guard<std::mutex> lock2(aircraftMutex);
+
         if (acJson != lastAircraftData[callsign]) {
             json j;
             j["type"] = "fpupdate";
@@ -506,11 +542,80 @@ void StripCol::OnFlightPlanControllerAssignedDataUpdate(CFlightPlan fp, int Data
     }
 }
 
+void StripCol::OnGetTagItem(EuroScopePlugIn::CFlightPlan FlightPlan,
+    EuroScopePlugIn::CRadarTarget RadarTarget,
+    int ItemCode,
+    int TagData,
+    char sItemString[16],
+    int* pColorCode,
+    COLORREF* pRGB,
+    double* pFontSize) {
+
+    if (ItemCode == TAG_ITEM_SIMULATED_CLEARANCE) {
+        if (!FlightPlan.IsValid()) return;
+        
+        std::string callsign = FlightPlan.GetCallsign();
+        bool isCleared = false;
+        
+        {
+            std::lock_guard<std::mutex> lock(clearanceMutex);
+            if (customClearanceFlags.count(callsign)) {
+                isCleared = customClearanceFlags[callsign];
+            }
+        }
+
+        *pFontSize = 12.0;
+
+        if (isCleared) {
+            strcpy_s(sItemString, 16, "\xA4");
+            *pColorCode = EuroScopePlugIn::TAG_COLOR_RGB_DEFINED;
+            *pRGB = RGB(0, 255, 0);
+        } else {
+            strcpy_s(sItemString, 16, "\xAC");
+        }
+    }
+}
+
+void StripCol::OnFunctionCall(int FunctionId,
+    const char* sItemString,
+    POINT Pt,
+    RECT Area) {
+
+    if (FunctionId == TAG_FUNC_TOGGLE_CLEARANCE) {
+        CFlightPlan fp = FlightPlanSelectASEL();
+
+        if (fp.IsValid()) {
+
+            std::string callsign = fp.GetCallsign();
+            bool newState = false;
+            {
+                std::lock_guard<std::mutex> lock(clearanceMutex);
+                newState = !customClearanceFlags[callsign];
+                customClearanceFlags[callsign] = newState;
+            }
+
+            // Notify Gateway
+            json j;
+            j["type"] = "clearance-update";
+            j["callsign"] = callsign;
+            j["cleared"] = newState;
+            wsClient->SendMessage(j.dump());
+        }
+    }
+}
+
 void StripCol::OnFlightPlanDisconnect(CFlightPlan fp) {
     if (!fp.IsValid() || !wsClient->IsConnected()) return;
     if (fp.GetState() == EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED) {
         std::string callsign = fp.GetCallsign();
+        
+        {
+            std::lock_guard<std::mutex> lock(clearanceMutex);
+            customClearanceFlags.erase(callsign);
+        }
+
         json j;
+
         j["type"] = "release";
         j["callsign"] = callsign;
         wsClient->SendMessage(j.dump());

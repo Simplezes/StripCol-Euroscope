@@ -11,7 +11,7 @@ namespace FlightPlanManager {
         return hasNumbers && hasLetters;
     }
 
-    std::string BuildAircraftJson(EuroScopePlugIn::CFlightPlan fp) {
+    std::string BuildAircraftJson(EuroScopePlugIn::CFlightPlan fp, bool customClearance) {
         if (!fp.IsValid()) return "{}";
 
         auto data = fp.GetFlightPlanData();
@@ -35,7 +35,8 @@ namespace FlightPlanManager {
         j["route"] = data.GetRoute() ? data.GetRoute() : "";
         j["remarks"] = data.GetRemarks() ? data.GetRemarks() : "";
         j["groundState"] = fp.GetGroundState();
-        j["clearedFlag"] = fp.GetClearenceFlag() ? 1 : 0;
+        j["clearedFlag"] = (customClearance || fp.GetClearenceFlag()) ? 1 : 0;
+
 
         const char* origin = data.GetOrigin();
         const char* destination = data.GetDestination();
