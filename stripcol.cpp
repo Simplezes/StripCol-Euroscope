@@ -146,7 +146,6 @@ bool StripCol::GetCustomClearance(const std::string& callsign) {
 }
 
 
-// Command Handlers Implementation
 void StripCol::HandleSetClearedAltitude(const std::string& jsonStr) {
     std::string callsign = GetJsonValue(jsonStr, "callsign");
     std::string altStr = GetJsonValue(jsonStr, "clearedAltitude");
@@ -357,7 +356,6 @@ void StripCol::HandleGetNearbyAircraft(const std::string& jsonStr) {
 }
 
 void StripCol::HandleSync(const std::string& jsonStr) {
-    // Send registration again
     CController myself = ControllerMyself();
     if (myself.IsValid()) {
         json j;
@@ -488,7 +486,6 @@ void StripCol::HandleAssumedState(CFlightPlan& fp, const std::string& callsign, 
     }
 }
 
-// Event Handlers
 void StripCol::OnControllerPositionUpdate(CController Controller) {
     connectionRequested = true;
 }
@@ -500,12 +497,31 @@ void StripCol::OnTimer(int Counter) {
     }
 
     ProcessPendingTasks();
-
-    if (wsClient->IsConnected()) {
+    if (Counter % 10 == 0) {
         CheckAllFlightPlans();
-        if (Counter % StripColConstants::ATCLIST_SYNC_INTERVAL_TICKS == 0) {
-            SendAtcList();
+    }
+
+    {
+        std::unordered_set<std::string> toProcess;
+        {
+            std::lock_guard<std::mutex> lock(dirtyMutex);
+            if (!dirtyAircraft.empty()) {
+                toProcess.swap(dirtyAircraft);
+            }
         }
+
+        for (const auto& callsign : toProcess) {
+            CFlightPlan fp = FlightPlanSelect(callsign.c_str());
+            if (fp.IsValid()) {
+                int state = fp.GetState();
+                HandleTransferState(fp, callsign, state);
+                HandleAssumedState(fp, callsign, state);
+            }
+        }
+    }
+
+    if (Counter % StripColConstants::ATCLIST_SYNC_INTERVAL_TICKS == 0) {
+        SendAtcList();
     }
 }
 
@@ -520,25 +536,18 @@ void StripCol::OnControllerDisconnect(CController Controller) {
 void StripCol::OnFlightPlanFlightPlanDataUpdate(CFlightPlan fp) {
     if (!fp.IsValid() || !wsClient->IsConnected()) return;
     std::string callsign = fp.GetCallsign();
-    int state = fp.GetState();
-    HandleTransferState(fp, callsign, state);
-    HandleAssumedState(fp, callsign, state);
+    {
+        std::lock_guard<std::mutex> lock(dirtyMutex);
+        dirtyAircraft.insert(callsign);
+    }
 }
 
 void StripCol::OnFlightPlanControllerAssignedDataUpdate(CFlightPlan fp, int DataType) {
     if (!fp.IsValid() || !wsClient->IsConnected()) return;
-    if (fp.GetState() == EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED) {
-        std::string callsign = fp.GetCallsign();
-        std::string acJson = FlightPlanManager::BuildAircraftJson(fp, GetCustomClearance(callsign));
-        std::lock_guard<std::mutex> lock2(aircraftMutex);
-
-        if (acJson != lastAircraftData[callsign]) {
-            json j;
-            j["type"] = "fpupdate";
-            j["data"] = json::parse(acJson);
-            wsClient->SendMessage(j.dump());
-            lastAircraftData[callsign] = acJson;
-        }
+    std::string callsign = fp.GetCallsign();
+    {
+        std::lock_guard<std::mutex> lock(dirtyMutex);
+        dirtyAircraft.insert(callsign);
     }
 }
 
@@ -594,7 +603,6 @@ void StripCol::OnFunctionCall(int FunctionId,
                 customClearanceFlags[callsign] = newState;
             }
 
-            // Notify Gateway
             json j;
             j["type"] = "clearance-update";
             j["callsign"] = callsign;
@@ -671,7 +679,6 @@ bool StripCol::OnCompileCommand(const char* sCommandLine) {
     return false;
 }
 
-// Plugin Entry Points
 static StripCol* g_pPlugin = nullptr;
 
 void EuroScopePlugInInit(CPlugIn** ppPlugInInstance) {

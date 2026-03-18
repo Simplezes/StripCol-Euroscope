@@ -34,6 +34,12 @@ void WebSocketClient::Disconnect() {
         }
     }
 
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        while (!outgoingQueue.empty()) outgoingQueue.pop();
+    }
+    queueCV.notify_all();
+
     if (wsThread.joinable()) {
         wsThread.join();
     }
@@ -47,6 +53,8 @@ void WebSocketClient::WebSocketThread() {
         return;
     }
 
+    srand((unsigned int)time(NULL));
+
     auto lastPing = std::chrono::steady_clock::now();
 
     while (running) {
@@ -59,15 +67,12 @@ void WebSocketClient::WebSocketThread() {
 
         while (running && wsConnected) {
             ReceiveMessages();
+            ProcessOutgoingQueue();
 
             auto now = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::seconds>(now - lastPing).count() >= 30) {
                 SendMessage("{\"type\":\"ping\"}");
                 lastPing = now;
-            }
-
-            if (running && wsConnected) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
 
@@ -157,9 +162,22 @@ bool WebSocketClient::AttemptConnection() {
     setsockopt(wsSocket, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
     wsConnected = true;
 
-    SendMessage("{\"type\":\"ping\"}");
+    SendMessage("{\"type\":\"sync-request\"}");
     Utils::LogMessage("WebSocket connected successfully.");
     return true;
+}
+
+void WebSocketClient::ProcessOutgoingQueue() {
+    std::string msg;
+    while (wsConnected && running) {
+        {
+            std::lock_guard<std::mutex> lock(queueMutex);
+            if (outgoingQueue.empty()) break;
+            msg = outgoingQueue.front();
+            outgoingQueue.pop();
+        }
+        SendWebSocketFrame(msg);
+    }
 }
 
 void WebSocketClient::SendRegistration() {
@@ -169,6 +187,14 @@ void WebSocketClient::SendRegistration() {
 }
 
 void WebSocketClient::SendMessage(const std::string& message) {
+    {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        outgoingQueue.push(message);
+    }
+    queueCV.notify_all();
+}
+
+void WebSocketClient::SendWebSocketFrame(const std::string& message) {
     std::lock_guard<std::mutex> lock(wsMutex);
     if (wsSocket == INVALID_SOCKET || !wsConnected) return;
 
@@ -177,20 +203,20 @@ void WebSocketClient::SendMessage(const std::string& message) {
     frame.push_back(0x81);
 
     unsigned char maskKey[4];
-    for (int i = 0; i < 4; i++) maskKey[i] = rand() % 256;
+    for (int i = 0; i < 4; i++) maskKey[i] = (unsigned char)(rand() % 256);
 
     if (msgLen < 126) {
         frame.push_back(0x80 | (unsigned char)msgLen);
     } else if (msgLen < 65536) {
         frame.push_back(0x80 | 126);
-        frame.push_back((msgLen >> 8) & 0xFF);
-        frame.push_back(msgLen & 0xFF);
+        frame.push_back((unsigned char)((msgLen >> 8) & 0xFF));
+        frame.push_back((unsigned char)(msgLen & 0xFF));
     } else {
         return;
     }
 
     for (int i = 0; i < 4; i++) frame.push_back(maskKey[i]);
-    for (size_t i = 0; i < msgLen; i++) frame.push_back(message[i] ^ maskKey[i % 4]);
+    for (size_t i = 0; i < msgLen; i++) frame.push_back((unsigned char)(message[i] ^ maskKey[i % 4]));
 
     if (send(wsSocket, (const char*)frame.data(), (int)frame.size(), 0) == SOCKET_ERROR) {
         Utils::LogMessage("Send failed: " + std::to_string(WSAGetLastError()));
@@ -209,7 +235,7 @@ void WebSocketClient::ReceiveMessages() {
         FD_SET(wsSocket, &readfds);
     }
 
-    timeval timeout{ 1, 0 };
+    timeval timeout{ 0, 50000 };
     int activity = select(0, &readfds, NULL, NULL, &timeout);
 
     if (activity > 0) {
@@ -281,7 +307,7 @@ bool WebSocketClient::CheckAvailability(const std::string& address, const std::s
     FD_ZERO(&writefds);
     FD_SET(testSocket, &writefds);
 
-    timeval timeout{ 1, 0 };
+    timeval timeout{ 0, 500000 };
     int result = select(0, NULL, &writefds, NULL, &timeout);
 
     closesocket(testSocket);

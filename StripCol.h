@@ -12,10 +12,8 @@
 
 using json = nlohmann::json;
 
-// Custom Tag IDs
 const int TAG_ITEM_SIMULATED_CLEARANCE = 101;
 const int TAG_FUNC_TOGGLE_CLEARANCE = 101;
-
 
 class StripCol : public EuroScopePlugIn::CPlugIn {
 private:
@@ -51,11 +49,14 @@ private:
     std::queue<PendingTask> taskQueue;
     std::mutex queueMutex;
 
+    // Dirty tracking
+    std::unordered_set<std::string> dirtyAircraft;
+    std::mutex dirtyMutex;
+
 public:
     StripCol();
     virtual ~StripCol();
 
-    // EuroScope Overrides
     void OnTimer(int Counter) override;
 
     void OnControllerPositionUpdate(EuroScopePlugIn::CController Controller) override;
@@ -65,7 +66,6 @@ public:
     void OnFlightPlanDisconnect(EuroScopePlugIn::CFlightPlan fp) override;
     bool OnCompileCommand(const char* sCommandLine) override;
 
-    // Custom Tag Handlers
     void OnGetTagItem(EuroScopePlugIn::CFlightPlan FlightPlan,
         EuroScopePlugIn::CRadarTarget RadarTarget,
         int ItemCode,
@@ -95,7 +95,6 @@ private:
     void HandleTransferState(EuroScopePlugIn::CFlightPlan& fp, const std::string& callsign, int state);
     void HandleAssumedState(EuroScopePlugIn::CFlightPlan& fp, const std::string& callsign, int state);
 
-    // Command Handlers
     void HandleSetClearedAltitude(const std::string& jsonStr);
     void HandleSetAssignedHeading(const std::string& jsonStr);
     void HandleSetAssignedSpeed(const std::string& jsonStr);

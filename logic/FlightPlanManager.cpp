@@ -37,73 +37,56 @@ namespace FlightPlanManager {
         j["groundState"] = fp.GetGroundState();
         j["clearedFlag"] = (customClearance || fp.GetClearenceFlag()) ? 1 : 0;
 
-
         const char* origin = data.GetOrigin();
         const char* destination = data.GetDestination();
 
         auto isNotificationPoint = [&](const char* name) {
-            if (!name || strlen(name) <= 1) return false;
-            if (origin && strcmp(name, origin) == 0) return false;
-            if (destination && strcmp(name, destination) == 0) return false;
+            if (!name || name[0] == '\0' || name[1] == '\0') return false;
+            if (origin && name[0] == origin[0] && strcmp(name, origin) == 0) return false;
+            if (destination && name[0] == destination[0] && strcmp(name, destination) == 0) return false;
 
             for (const char* p = name; *p; ++p) {
-                if (isdigit((unsigned char)*p)) return false;
+                if (*p >= '0' && *p <= '9') return false;
             }
             return true;
         };
 
-        auto getPointsList = [&](const std::vector<std::pair<std::string, int>>& points) {
+        int pointsCount = route.GetPointsNumber();
+        std::vector<std::pair<std::string, int>> upcomingPoints;
+        std::vector<std::pair<std::string, int>> arrivalPointsTemp;
+
+        for (int i = 0; i < pointsCount; i++) {
+            int minutes = route.GetPointDistanceInMinutes(i);
+            if (minutes >= 0) {
+                if (upcomingPoints.size() < 5) {
+                    const char* name = route.GetPointName(i);
+                    if (isNotificationPoint(name)) upcomingPoints.emplace_back(name, minutes);
+                }
+            }
+            if (i > pointsCount - 15) {
+                const char* name = route.GetPointName(i);
+                if (isNotificationPoint(name)) arrivalPointsTemp.emplace_back(name, minutes);
+            }
+        }
+
+        if (arrivalPointsTemp.size() > 5) {
+            arrivalPointsTemp.erase(arrivalPointsTemp.begin(), arrivalPointsTemp.begin() + (arrivalPointsTemp.size() - 5));
+        }
+
+        auto buildPointsList = [&](const std::vector<std::pair<std::string, int>>& points) {
             json arr = json::array();
             time_t now = time(nullptr);
             for (const auto& p : points) {
                 int totalMinutes = (int)((now / 60) % 1440) + p.second;
                 char timeStr[8];
                 snprintf(timeStr, sizeof(timeStr), "%02d%02d", (totalMinutes / 60) % 24, totalMinutes % 60);
-                
-                json point;
-                point["name"] = p.first;
-                point["eta"] = timeStr;
-                arr.push_back(point);
+                arr.push_back({ {"name", p.first}, {"eta", timeStr} });
             }
             return arr;
         };
 
-        int pointsCount = route.GetPointsNumber();
-        int originIdx = -1, destIdx = -1;
-
-        for (int i = 0; i < pointsCount; i++) {
-            const char* name = route.GetPointName(i);
-            if (name) {
-                if (originIdx == -1 && origin && strcmp(name, origin) == 0) originIdx = i;
-                if (destination && strcmp(name, destination) == 0) destIdx = i;
-            }
-        }
-
-        if (originIdx == -1) originIdx = 0;
-        if (destIdx == -1) destIdx = pointsCount - 1;
-
-        std::vector<std::pair<std::string, int>> upcomingPoints;
-        for (int i = 0; i < pointsCount && upcomingPoints.size() < 5; i++) {
-            int minutes = route.GetPointDistanceInMinutes(i);
-            if (minutes >= 0) {
-                const char* name = route.GetPointName(i);
-                if (isNotificationPoint(name)) {
-                    upcomingPoints.emplace_back(name, minutes);
-                }
-            }
-        }
-
-        std::vector<std::pair<std::string, int>> arrivalPoints;
-        for (int i = destIdx - 1; i > originIdx && arrivalPoints.size() < 5; i--) {
-            const char* name = route.GetPointName(i);
-            if (isNotificationPoint(name)) {
-                arrivalPoints.emplace_back(name, route.GetPointDistanceInMinutes(i));
-            }
-        }
-        std::reverse(arrivalPoints.begin(), arrivalPoints.end());
-
-        j["departurePoints"] = getPointsList(upcomingPoints);
-        j["arrivalPoints"] = getPointsList(arrivalPoints);
+        j["departurePoints"] = buildPointsList(upcomingPoints);
+        j["arrivalPoints"] = buildPointsList(arrivalPointsTemp);
 
         j["clearedAltitude"] = assignedData.GetClearedAltitude();
         j["assignedHeading"] = assignedData.GetAssignedHeading();
