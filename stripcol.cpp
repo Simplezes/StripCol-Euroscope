@@ -23,8 +23,17 @@ StripCol::StripCol()
         Utils::LogMessage("Gateway not available - will retry on position connect");
     }
 
+    squawkManager = std::make_unique<SquawkManager>();
+    if (squawkManager->LoadSquawks("squawks.json")) {
+        Utils::LogMessage("Squawks configuration loaded successfully.");
+    } else {
+        Utils::LogMessage("Failed to load squawks.json configuration.");
+    }
+
     RegisterTagItemType("Simulated Clearance", TAG_ITEM_SIMULATED_CLEARANCE);
+    RegisterTagItemType("Squawk Assignment", TAG_ITEM_SQUAWK);
     RegisterTagItemFunction("Toggle Clearance", TAG_FUNC_TOGGLE_CLEARANCE);
+    RegisterTagItemFunction("Assign Squawk", TAG_FUNC_ASSIGN_SQUAWK);
 }
 
 StripCol::~StripCol() {
@@ -111,7 +120,8 @@ void StripCol::ProcessPendingTasks() {
             {"sync", &StripCol::HandleSync},
             {"assume-aircraft", &StripCol::HandleAssumeAircraft},
             {"get-nearby-aircraft", &StripCol::HandleGetNearbyAircraft},
-            {"set-clearance", &StripCol::HandleSetClearance}
+            {"set-clearance", &StripCol::HandleSetClearance},
+            {"generate-squawk", &StripCol::HandleGenerateSquawk}
         };
 
         auto it = handlers.find(task.type);
@@ -327,6 +337,20 @@ void StripCol::HandleSetClearance(const std::string& jsonStr) {
 
     CFlightPlan fp = FlightPlanSelect(callsign.c_str());
     if (fp.IsValid()) {
+    }
+}
+
+void StripCol::HandleGenerateSquawk(const std::string& jsonStr) {
+    std::string callsign = GetJsonValue(jsonStr, "callsign");
+    if (callsign.empty()) return;
+    
+    CFlightPlan fp = FlightPlanSelect(callsign.c_str());
+    if (fp.IsValid()) {
+        std::string code = squawkManager->AssignSquawk(fp, this);
+        if (!code.empty()) {
+            fp.GetControllerAssignedData().SetSquawk(code.c_str());
+            Utils::LogMessage("Remote generated squawk " + code + " for " + callsign);
+        }
     }
 }
 
@@ -582,6 +606,23 @@ void StripCol::OnGetTagItem(EuroScopePlugIn::CFlightPlan FlightPlan,
         } else {
             strcpy_s(sItemString, 16, "\xAC");
         }
+    } else if (ItemCode == TAG_ITEM_SQUAWK) {
+        if (!FlightPlan.IsValid()) return;
+        
+        char buf[16];
+        const char* assr = FlightPlan.GetControllerAssignedData().GetSquawk();
+        const char* pssr = RadarTarget.IsValid() ? RadarTarget.GetPosition().GetSquawk() : "";
+
+        if (assr && strlen(assr) > 0) {
+            strcpy_s(sItemString, 16, assr);
+            if (pssr && strlen(pssr) > 0 && strcmp(assr, pssr) != 0) {
+                // Mismatch: Different color
+                *pColorCode = EuroScopePlugIn::TAG_COLOR_RGB_DEFINED;
+                *pRGB = RGB(255, 165, 0); // Orange
+            }
+        } else {
+            strcpy_s(sItemString, 16, "SQ?");
+        }
     }
 }
 
@@ -608,6 +649,17 @@ void StripCol::OnFunctionCall(int FunctionId,
             j["callsign"] = callsign;
             j["cleared"] = newState;
             wsClient->SendMessage(j.dump());
+        }
+    } else if (FunctionId == TAG_FUNC_ASSIGN_SQUAWK) {
+        CFlightPlan fp = FlightPlanSelectASEL();
+        if (fp.IsValid()) {
+            std::string code = squawkManager->AssignSquawk(fp, this);
+            if (!code.empty()) {
+                fp.GetControllerAssignedData().SetSquawk(code.c_str());
+                Utils::LogMessage("Assigned squawk " + code + " to " + fp.GetCallsign());
+            } else {
+                Utils::LogMessage("No available squawk range for " + std::string(fp.GetCallsign()));
+            }
         }
     }
 }

@@ -1,0 +1,284 @@
+{
+    "airports": [
+        {
+            "icao": "SKAR",
+            "fir": "SKED",
+            "international": [
+                1040,
+                1077
+            ]
+        },
+        {
+            "icao": "SKBG",
+            "fir": "SKED",
+            "international": [
+                1001,
+                1037
+            ]
+        },
+        {
+            "icao": "SKCC",
+            "fir": "SKED",
+            "international": [
+                1001,
+                1027
+            ]
+        },
+        {
+            "icao": "SKCL",
+            "fir": "SKED",
+            "national": [
+                1601,
+                1677
+            ],
+            "international": [
+                2440,
+                2477
+            ]
+        },
+        {
+            "icao": "SKCO",
+            "fir": "SKED",
+            "national": [
+                1601,
+                1677
+            ],
+            "international": [
+                2440,
+                2477
+            ]
+        },
+        {
+            "icao": "SKEJ",
+            "fir": "SKED",
+            "international": [
+                1001,
+                1037
+            ]
+        },
+        {
+            "icao": "SKGB",
+            "fir": "SKED",
+            "national": [
+                1601,
+                1677
+            ],
+            "international": [
+                2440,
+                2477
+            ]
+        },
+        {
+            "icao": "SKGO",
+            "fir": "SKEC",
+            "international": [
+                1040,
+                1077
+            ]
+        },
+        {
+            "icao": "SKGP",
+            "fir": "SKED",
+            "national": [
+                1601,
+                1677
+            ],
+            "international": [
+                2440,
+                2477
+            ]
+        },
+        {
+            "icao": "SKIP",
+            "fir": "SKED",
+            "international": [
+                7650,
+                7677
+            ]
+        },
+        {
+            "icao": "SKLC",
+            "fir": "SKED",
+            "national": [
+                1401,
+                1477
+            ],
+            "international": [
+                2401,
+                2437
+            ]
+        },
+        {
+            "icao": "SKLT",
+            "fir": "SKED",
+            "international": [
+                1060,
+                1077
+            ]
+        },
+        {
+            "icao": "SKMD",
+            "fir": "SKED",
+            "national": [
+                1401,
+                1477
+            ],
+            "international": [
+                2401,
+                2437
+            ]
+        },
+        {
+            "icao": "SKNV",
+            "fir": "SKED",
+            "international": [
+                1740,
+                1777
+            ]
+        },
+        {
+            "icao": "SKPE",
+            "fir": "SKED",
+            "international": [
+                1040,
+                1077
+            ]
+        },
+        {
+            "icao": "SKPP",
+            "fir": "SKED",
+            "national": [
+                1601,
+                1677
+            ],
+            "international": [
+                2440,
+                2477
+            ]
+        },
+        {
+            "icao": "SKPS",
+            "fir": "SKED",
+            "national": [
+                1601,
+                1677
+            ],
+            "international": [
+                2440,
+                2477
+            ]
+        },
+        {
+            "icao": "SKPV",
+            "fir": "SKEC",
+            "national": [
+                1560,
+                1677
+            ],
+            "international": [
+                6670,
+                6677
+            ]
+        },
+        {
+            "icao": "SKRG",
+            "fir": "SKED",
+            "national": [
+                1401,
+                1477
+            ],
+            "international": [
+                2401,
+                2437
+            ]
+        },
+        {
+            "icao": "SKSA",
+            "fir": "SKED",
+            "international": [
+                1001,
+                1027
+            ]
+        },
+        {
+            "icao": "SKSP",
+            "fir": "SKEC",
+            "national": [
+                1560,
+                1677
+            ],
+            "international": [
+                6670,
+                6677
+            ]
+        },
+        {
+            "icao": "SKTM",
+            "fir": "SKED",
+            "international": [
+                1001,
+                1027
+            ]
+        },
+        {
+            "icao": "SKUC",
+            "fir": "SKED",
+            "international": [
+                1001,
+                1027
+            ]
+        },
+        {
+            "icao": "SKUI",
+            "fir": "SKED",
+            "national": [
+                1401,
+                1477
+            ],
+            "international": [
+                2401,
+                2437
+            ]
+        },
+        {
+            "icao": "SKVV",
+            "fir": "SKED",
+            "national": [
+                1501,
+                1577
+            ]
+        },
+        {
+            "icao": "SKYP",
+            "fir": "SKED",
+            "international": [
+                1030,
+                1057
+            ]
+        },
+        {
+            "icao": "SKBO",
+            "fir": "SKED",
+            "national": [
+                1201,
+                1277
+            ],
+            "international": [
+                2201,
+                2277
+            ]
+        },
+        {
+            "icao": "SKBQ",
+            "fir": "SKEC",
+            "national": [
+                1701,
+                1777
+            ],
+            "international": [
+                6601,
+                6677
+            ]
+        }
+    ]
+}

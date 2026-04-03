@@ -2,6 +2,7 @@
 
 #include "EuroScopePlugIn.h"
 #include "WebSocketClient.h"
+#include "squawk/SquawkManager.h"
 #include <string>
 #include <unordered_set>
 #include <unordered_map>
@@ -13,10 +14,15 @@
 using json = nlohmann::json;
 
 const int TAG_ITEM_SIMULATED_CLEARANCE = 101;
+const int TAG_ITEM_SQUAWK = 102;
 const int TAG_FUNC_TOGGLE_CLEARANCE = 101;
+const int TAG_FUNC_ASSIGN_SQUAWK = 102;
 
 class StripCol : public EuroScopePlugIn::CPlugIn {
 private:
+    // Squawk Management
+    std::unique_ptr<SquawkManager> squawkManager;
+    
     // WebSocket Client
     std::unique_ptr<WebSocketClient> wsClient;
     std::mutex gatewayMutex;
@@ -113,6 +119,7 @@ private:
     void HandleAssumeAircraft(const std::string& jsonStr);
     void HandleGetNearbyAircraft(const std::string& jsonStr);
     void HandleSetClearance(const std::string& jsonStr);
+    void HandleGenerateSquawk(const std::string& jsonStr);
 
 
     std::string GetJsonValue(const std::string& jsonStr, const std::string& key);
