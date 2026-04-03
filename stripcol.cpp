@@ -3,7 +3,9 @@
 #include "FlightPlanManager.h"
 #include "Utils.h"
 #include "Constants.h"
+#include "HttpClient.h"
 #include <algorithm>
+#include <sstream>
 
 using namespace EuroScopePlugIn;
 
@@ -14,6 +16,8 @@ StripCol::StripCol()
               StripColConstants::PLUGIN_AUTHOR.c_str(), 
               StripColConstants::PLUGIN_COPYRIGHT.c_str()) {
     
+    Utils::LoadEnv(".env");
+
     wsClient = std::make_unique<WebSocketClient>(gatewayAddress, "3000", 
         [this](const std::string& msg) { this->HandleWebSocketMessage(msg); });
 
@@ -34,6 +38,8 @@ StripCol::StripCol()
     RegisterTagItemType("Squawk Assignment", TAG_ITEM_SQUAWK);
     RegisterTagItemFunction("Toggle Clearance", TAG_FUNC_TOGGLE_CLEARANCE);
     RegisterTagItemFunction("Assign Squawk", TAG_FUNC_ASSIGN_SQUAWK);
+    RegisterTagItemFunction("Auto Squawk", TAG_FUNC_DO_AUTO_SQUAWK);
+    RegisterTagItemFunction("Manual Squawk", TAG_FUNC_MANUAL_SQUAWK_INPUT);
 }
 
 StripCol::~StripCol() {
@@ -335,6 +341,15 @@ void StripCol::HandleSetClearance(const std::string& jsonStr) {
         customClearanceFlags[callsign] = cleared;
     }
 
+    std::string baseUrl = Utils::GetEnv("STRIPCOL_BASE_URL");
+    std::string apiKey = Utils::GetEnv("STRIPCOL_API_KEY");
+    if (!apiKey.empty() && !baseUrl.empty()) {
+        json globalJ;
+        globalJ["callsign"] = callsign;
+        globalJ["status"] = cleared;
+        HttpClient::PostAsync(baseUrl + "/clearancelog", globalJ.dump(), apiKey, nullptr);
+    }
+
     CFlightPlan fp = FlightPlanSelect(callsign.c_str());
     if (fp.IsValid()) {
     }
@@ -345,11 +360,25 @@ void StripCol::HandleGenerateSquawk(const std::string& jsonStr) {
     if (callsign.empty()) return;
     
     CFlightPlan fp = FlightPlanSelect(callsign.c_str());
-    if (fp.IsValid()) {
+    if (fp.IsValid() && fp.GetState() == EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED) {
         std::string code = squawkManager->AssignSquawk(fp, this);
         if (!code.empty()) {
             fp.GetControllerAssignedData().SetSquawk(code.c_str());
             Utils::LogMessage("Remote generated squawk " + code + " for " + callsign);
+
+            json response;
+            response["type"] = "squawk-assigned";
+            response["callsign"] = callsign;
+            response["code"] = code;
+            wsClient->SendMessage(response.dump());
+
+            std::string baseUrl = Utils::GetEnv("STRIPCOL_BASE_URL");
+            std::string apiKey = Utils::GetEnv("STRIPCOL_API_KEY");
+            if (!apiKey.empty() && !baseUrl.empty()) {
+                json globalJ;
+                globalJ["code"] = code;
+                HttpClient::PostAsync(baseUrl + "/squawklog", globalJ.dump(), apiKey, nullptr);
+            }
         }
     }
 }
@@ -525,6 +554,10 @@ void StripCol::OnTimer(int Counter) {
         CheckAllFlightPlans();
     }
 
+    if (Counter % 20 == 0) {
+        FetchGlobalData();
+    }
+
     {
         std::unordered_set<std::string> toProcess;
         {
@@ -609,16 +642,14 @@ void StripCol::OnGetTagItem(EuroScopePlugIn::CFlightPlan FlightPlan,
     } else if (ItemCode == TAG_ITEM_SQUAWK) {
         if (!FlightPlan.IsValid()) return;
         
-        char buf[16];
         const char* assr = FlightPlan.GetControllerAssignedData().GetSquawk();
         const char* pssr = RadarTarget.IsValid() ? RadarTarget.GetPosition().GetSquawk() : "";
 
         if (assr && strlen(assr) > 0) {
             strcpy_s(sItemString, 16, assr);
             if (pssr && strlen(pssr) > 0 && strcmp(assr, pssr) != 0) {
-                // Mismatch: Different color
                 *pColorCode = EuroScopePlugIn::TAG_COLOR_RGB_DEFINED;
-                *pRGB = RGB(255, 165, 0); // Orange
+                *pRGB = RGB(255, 165, 0);
             }
         } else {
             strcpy_s(sItemString, 16, "SQ?");
@@ -634,7 +665,7 @@ void StripCol::OnFunctionCall(int FunctionId,
     if (FunctionId == TAG_FUNC_TOGGLE_CLEARANCE) {
         CFlightPlan fp = FlightPlanSelectASEL();
 
-        if (fp.IsValid()) {
+        if (fp.IsValid() && fp.GetState() == EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED) {
 
             std::string callsign = fp.GetCallsign();
             bool newState = false;
@@ -649,16 +680,58 @@ void StripCol::OnFunctionCall(int FunctionId,
             j["callsign"] = callsign;
             j["cleared"] = newState;
             wsClient->SendMessage(j.dump());
+            
+            std::string baseUrl = Utils::GetEnv("STRIPCOL_BASE_URL");
+            std::string apiKey = Utils::GetEnv("STRIPCOL_API_KEY");
+            if (!apiKey.empty() && !baseUrl.empty()) {
+                json globalJ;
+                globalJ["callsign"] = callsign;
+                globalJ["status"] = newState;
+                HttpClient::PostAsync(baseUrl + "/clearancelog", globalJ.dump(), apiKey, nullptr);
+            }
         }
     } else if (FunctionId == TAG_FUNC_ASSIGN_SQUAWK) {
+        OpenPopupList(Area, "Assign Squawk", 2);
+        AddPopupListElement("Auto Assign", "", TAG_FUNC_DO_AUTO_SQUAWK);
+        AddPopupListElement("Manual Set", "", TAG_FUNC_MANUAL_SQUAWK_INPUT);
+    } else if (FunctionId == TAG_FUNC_DO_AUTO_SQUAWK) {
         CFlightPlan fp = FlightPlanSelectASEL();
-        if (fp.IsValid()) {
+        if (fp.IsValid() && fp.GetState() == EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED) {
             std::string code = squawkManager->AssignSquawk(fp, this);
             if (!code.empty()) {
                 fp.GetControllerAssignedData().SetSquawk(code.c_str());
                 Utils::LogMessage("Assigned squawk " + code + " to " + fp.GetCallsign());
+                
+                std::string baseUrl = Utils::GetEnv("STRIPCOL_BASE_URL");
+                std::string apiKey = Utils::GetEnv("STRIPCOL_API_KEY");
+                if (!apiKey.empty() && !baseUrl.empty()) {
+                    json globalJ;
+                    globalJ["code"] = code;
+                    HttpClient::PostAsync(baseUrl + "/squawklog", globalJ.dump(), apiKey, nullptr);
+                }
             } else {
                 Utils::LogMessage("No available squawk range for " + std::string(fp.GetCallsign()));
+            }
+        }
+    } else if (FunctionId == TAG_FUNC_MANUAL_SQUAWK_INPUT) {
+        if (sItemString && strcmp(sItemString, "Manual Set") == 0) {
+            CFlightPlan fp = FlightPlanSelectASEL();
+            const char* current = fp.IsValid() ? fp.GetControllerAssignedData().GetSquawk() : "";
+            OpenPopupEdit(Area, FunctionId, current);
+        } else if (sItemString && strlen(sItemString) > 0) {
+            CFlightPlan fp = FlightPlanSelectASEL();
+            if (fp.IsValid() && fp.GetState() == EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED) {
+                std::string code = sItemString;
+                fp.GetControllerAssignedData().SetSquawk(code.c_str());
+                Utils::LogMessage("Manually assigned squawk " + code + " to " + fp.GetCallsign());
+                
+                std::string baseUrl = Utils::GetEnv("STRIPCOL_BASE_URL");
+                std::string apiKey = Utils::GetEnv("STRIPCOL_API_KEY");
+                if (!apiKey.empty() && !baseUrl.empty()) {
+                    json globalJ;
+                    globalJ["code"] = code;
+                    HttpClient::PostAsync(baseUrl + "/squawklog", globalJ.dump(), apiKey, nullptr);
+                }
             }
         }
     }
@@ -729,6 +802,54 @@ bool StripCol::OnCompileCommand(const char* sCommandLine) {
     }
 
     return false;
+}
+
+void StripCol::FetchGlobalData() {
+    std::string baseUrl = Utils::GetEnv("STRIPCOL_BASE_URL");
+    std::string apiKey = Utils::GetEnv("STRIPCOL_API_KEY");
+    if (apiKey.empty() || baseUrl.empty()) return;
+
+    HttpClient::GetAsync(baseUrl + "/squawklog", apiKey, [this](bool success, const std::string& response) {
+        if (!success) return;
+        std::unordered_set<std::string> incomingSquawks;
+        std::stringstream ss(response);
+        std::string line;
+        while (std::getline(ss, line)) {
+            if (line.empty()) continue;
+            size_t tabPos = line.find('\t');
+            std::string code = (tabPos != std::string::npos) ? line.substr(0, tabPos) : line;
+            if (code.length() >= 4) {
+                incomingSquawks.insert(code.substr(0, 4));
+            }
+        }
+        std::lock_guard<std::mutex> lock(globalSquawkMutex);
+        globalSquawks = std::move(incomingSquawks);
+    });
+
+    HttpClient::GetAsync(baseUrl + "/clearancelog", apiKey, [this](bool success, const std::string& response) {
+        if (!success) return;
+        std::stringstream ss(response);
+        std::string line;
+        while (std::getline(ss, line)) {
+            if (line.empty()) continue;
+            size_t colPos = line.find(':');
+            if (colPos != std::string::npos) {
+                std::string callsign = line.substr(0, colPos);
+                std::string statusStr = line.substr(colPos + 1);
+
+                if (!statusStr.empty() && statusStr.back() == '\r') statusStr.pop_back();
+                bool status = (statusStr == "true" || statusStr == "1");
+
+                std::lock_guard<std::mutex> lock(clearanceMutex);
+                customClearanceFlags[callsign] = status;
+            }
+        }
+    });
+}
+
+bool StripCol::IsSquawkUsedGlobally(const std::string& squawk) {
+    std::lock_guard<std::mutex> lock(globalSquawkMutex);
+    return globalSquawks.count(squawk) > 0;
 }
 
 static StripCol* g_pPlugin = nullptr;

@@ -30,10 +30,16 @@
     <ClInclude Include="network\WebSocketClient.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="network\HttpClient.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="logic\FlightPlanManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="StripCol.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="squawk\SquawkManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -53,7 +59,13 @@
     <ClCompile Include="network\WebSocketClient.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="network\HttpClient.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="logic\FlightPlanManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="squawk\SquawkManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -8,13 +8,16 @@
 
 using json = nlohmann::json;
 
+struct SquawkCodeRange {
+    int start;
+    int end;
+};
+
 struct SquawkRange {
     std::string icao;
     std::string fir;
-    int nationalStart;
-    int nationalEnd;
-    int internationalStart;
-    int internationalEnd;
+    std::vector<SquawkCodeRange> national;
+    std::vector<SquawkCodeRange> international;
 };
 
 class SquawkManager {

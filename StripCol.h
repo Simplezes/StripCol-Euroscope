@@ -17,6 +17,8 @@ const int TAG_ITEM_SIMULATED_CLEARANCE = 101;
 const int TAG_ITEM_SQUAWK = 102;
 const int TAG_FUNC_TOGGLE_CLEARANCE = 101;
 const int TAG_FUNC_ASSIGN_SQUAWK = 102;
+const int TAG_FUNC_DO_AUTO_SQUAWK = 103;
+const int TAG_FUNC_MANUAL_SQUAWK_INPUT = 104;
 
 class StripCol : public EuroScopePlugIn::CPlugIn {
 private:
@@ -46,8 +48,10 @@ private:
     std::unordered_map<std::string, bool> customClearanceFlags;
     std::mutex clearanceMutex;
 
+    // Global syncing
+    std::unordered_set<std::string> globalSquawks;
+    std::mutex globalSquawkMutex;
 
-    // Command Queue
     struct PendingTask {
         std::string type;
         std::string json;
@@ -62,6 +66,9 @@ private:
 public:
     StripCol();
     virtual ~StripCol();
+
+    void FetchGlobalData();
+    bool IsSquawkUsedGlobally(const std::string& squawk);
 
     void OnTimer(int Counter) override;
 
@@ -97,7 +104,7 @@ private:
 
     void SendAtcList(bool force = false);
     void CheckAllFlightPlans();
-    
+
     void HandleTransferState(EuroScopePlugIn::CFlightPlan& fp, const std::string& callsign, int state);
     void HandleAssumedState(EuroScopePlugIn::CFlightPlan& fp, const std::string& callsign, int state);
 

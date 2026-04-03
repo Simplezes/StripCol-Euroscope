@@ -4,7 +4,7 @@
 
 namespace StripColConstants {
     const std::string PLUGIN_NAME = "StripCol";
-    const std::string PLUGIN_VERSION = "2.6";
+    const std::string PLUGIN_VERSION = "2.7";
     const std::string PLUGIN_AUTHOR = "Simplezes";
     const std::string PLUGIN_COPYRIGHT = "Copyright 2026";
 
