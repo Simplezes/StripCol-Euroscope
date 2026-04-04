@@ -66,6 +66,7 @@ void StripCol::ConnectToGateway() {
                 DisplayUserMessage("StripCol", "Pairing", message.c_str(), true, true, false, false, false);
             }
             j["code"] = pairingCode;
+            registeredCallsign = myself.GetCallsign();
         }
 
         j["callsign"] = myself.GetCallsign();
@@ -87,8 +88,6 @@ void StripCol::ConnectToGateway() {
 
 void StripCol::DisconnectFromGateway() {
     wsClient->Disconnect();
-    std::lock_guard<std::mutex> lock(codeMutex);
-    pairingCode.clear();
 }
 
 void StripCol::HandleWebSocketMessage(const std::string& message) {
@@ -541,11 +540,30 @@ void StripCol::HandleAssumedState(CFlightPlan& fp, const std::string& callsign, 
 
 void StripCol::OnControllerPositionUpdate(CController Controller) {
     CController myself = ControllerMyself();
-    if (!myself.IsValid() || std::string(Controller.GetCallsign()) != std::string(myself.GetCallsign())) return;
+    if (!myself.IsValid() || std::string(Controller.GetCallsign()) != std::string(myself.GetCallsign()))
+        return;
 
     if (wsClient->IsRunning()) {
+        std::string currentRegistered;
+        {
+            std::lock_guard<std::mutex> lock(codeMutex);
+            currentRegistered = registeredCallsign;
+        }
+        // Already connected with the same position — nothing to do
+        if (currentRegistered == std::string(myself.GetCallsign())) return;
+
+        // Different position: close the old session and start fresh
         DisconnectFromGateway();
+        {
+            std::lock_guard<std::mutex> lock(codeMutex);
+            pairingCode.clear();
+            registeredCallsign.clear();
+        }
+        std::lock_guard<std::mutex> lock(aircraftMutex);
+        assumedAircraft.clear();
+        lastAircraftData.clear();
     }
+
     connectionRequested = true;
 }
 
@@ -587,8 +605,19 @@ void StripCol::OnTimer(int Counter) {
 }
 
 void StripCol::OnControllerDisconnect(CController Controller) {
-    Utils::LogMessage("Controller disconnected, stopping plugin...");
+    std::string dcCallsign = Controller.GetCallsign();
+    {
+        std::lock_guard<std::mutex> lock(codeMutex);
+        if (dcCallsign != registeredCallsign) return;
+    }
+
+    Utils::LogMessage("My position disconnected, stopping plugin...");
     DisconnectFromGateway();
+    {
+        std::lock_guard<std::mutex> lock(codeMutex);
+        pairingCode.clear();
+        registeredCallsign.clear();
+    }
     std::lock_guard<std::mutex> lock(aircraftMutex);
     assumedAircraft.clear();
     lastAircraftData.clear();
@@ -771,6 +800,11 @@ bool StripCol::OnCompileCommand(const char* sCommandLine) {
     if (cmd.find(".striprestart") == 0) {
         Utils::LogMessage("Manual restart triggered via command.");
         DisconnectFromGateway();
+        {
+            std::lock_guard<std::mutex> lock(codeMutex);
+            pairingCode.clear();
+            registeredCallsign.clear();
+        }
         ConnectToGateway();
         DisplayUserMessage("StripCol", "System", "Gateway connection restarted.", true, true, false, false, false);
         return true;

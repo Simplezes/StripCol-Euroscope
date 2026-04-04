@@ -29,6 +29,7 @@ private:
     
     // Pairing code
     std::string pairingCode;
+    std::string registeredCallsign;
     std::mutex codeMutex;
 
     // Aircraft tracking
