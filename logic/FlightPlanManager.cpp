@@ -2,6 +2,9 @@
 #include "FlightPlanManager.h"
 #include <algorithm>
 #include <ctime>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 namespace FlightPlanManager {
 

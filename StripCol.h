@@ -9,10 +9,6 @@
 #include <mutex>
 #include <queue>
 #include <atomic>
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
-
 const int TAG_ITEM_SIMULATED_CLEARANCE = 101;
 const int TAG_ITEM_SQUAWK = 102;
 const int TAG_FUNC_TOGGLE_CLEARANCE = 101;

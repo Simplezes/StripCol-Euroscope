@@ -4,7 +4,10 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <nlohmann/json.hpp>
 #include "../StripCol.h"
+
+using json = nlohmann::json;
 
 SquawkManager::SquawkManager() {
 }
@@ -101,7 +104,7 @@ bool SquawkManager::IsModeSDetected(EuroScopePlugIn::CFlightPlan fp) {
     return (rt.GetPosition().GetRadarFlags() & 4) != 0;
 }
 
-bool SquawkManager::GetRange(const std::string& adep, bool national, SquawkRange& outRange) {
+bool SquawkManager::GetRange(const std::string& adep, SquawkRange& outRange) {
     for (const auto& range : m_squawkRanges) {
         if (range.icao == adep) {
             outRange = range;
@@ -144,7 +147,7 @@ std::string SquawkManager::AssignSquawk(EuroScopePlugIn::CFlightPlan fp, EuroSco
     std::string adep = fp.GetFlightPlanData().GetOrigin();
     
     SquawkRange range;
-    if (GetRange(adep, national, range)) {
+    if (GetRange(adep, range)) {
         const auto& ranges = (national && !range.national.empty()) ? range.national : range.international;
 
         for (const auto& r : ranges) {

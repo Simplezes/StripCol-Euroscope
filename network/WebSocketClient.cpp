@@ -225,7 +225,7 @@ void WebSocketClient::SendWebSocketFrame(const std::string& message) {
 }
 
 void WebSocketClient::ReceiveMessages() {
-    char buffer[4096];
+    char buffer[16384];
     fd_set readfds;
     FD_ZERO(&readfds);
 
@@ -257,6 +257,11 @@ void WebSocketClient::ReceiveMessages() {
             if (opcode == 0x08) {
                 wsConnected = false;
                 return;
+            } else if (opcode == 0x09) {
+                // Ping - respond with empty Pong
+                unsigned char pong[] = {0x8A, 0x80, 0x00, 0x00, 0x00, 0x00};
+                std::lock_guard<std::mutex> lock(wsMutex);
+                if (wsSocket != INVALID_SOCKET) send(wsSocket, (const char*)pong, sizeof(pong), 0);
             } else if (opcode == 0x01) {
                 unsigned char payloadLen = buffer[1] & 0x7F;
                 int payloadStart = 2;
@@ -265,6 +270,11 @@ void WebSocketClient::ReceiveMessages() {
                 if (payloadLen == 126) {
                     actualLen = (static_cast<unsigned char>(buffer[2]) << 8) | static_cast<unsigned char>(buffer[3]);
                     payloadStart = 4;
+                } else if (payloadLen == 127) {
+                    actualLen = 0;
+                    for (int i = 0; i < 8; i++)
+                        actualLen = (actualLen << 8) | static_cast<unsigned char>(buffer[2 + i]);
+                    payloadStart = 10;
                 }
 
                 if (payloadStart + actualLen <= static_cast<size_t>(bytesRead)) {

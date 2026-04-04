@@ -56,8 +56,10 @@ namespace Utils {
 
     std::string GenerateWebSocketKey() {
         std::vector<unsigned char> nonce(16);
+        std::random_device rd;
+        std::uniform_int_distribution<unsigned int> dist(0, 255);
         for (int i = 0; i < 16; i++) {
-            nonce[i] = rand() % 256;
+            nonce[i] = static_cast<unsigned char>(dist(rd));
         }
         return Base64Encode(nonce);
     }

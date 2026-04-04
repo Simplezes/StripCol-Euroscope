@@ -4,10 +4,6 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
-
 struct SquawkCodeRange {
     int start;
     int end;
@@ -33,7 +29,7 @@ public:
 
     bool IsModeSDetected(EuroScopePlugIn::CFlightPlan fp);
 
-    bool GetRange(const std::string& adep, bool national, SquawkRange& outRange);
+    bool GetRange(const std::string& adep, SquawkRange& outRange);
 
 private:
     std::vector<SquawkRange> m_squawkRanges;

@@ -11,7 +11,10 @@ std::string HttpClient::PerformRequest(const std::string& urlStr, const std::str
     URL_COMPONENTS urlComp = { 0 };
     urlComp.dwStructSize = sizeof(urlComp);
     
-    std::wstring wUrl(urlStr.begin(), urlStr.end());
+    int srcLen = static_cast<int>(urlStr.length());
+    int wLen = MultiByteToWideChar(CP_UTF8, 0, urlStr.c_str(), srcLen, nullptr, 0);
+    std::wstring wUrl(wLen, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, urlStr.c_str(), srcLen, &wUrl[0], wLen);
     
     wchar_t hostName[256] = { 0 };
     wchar_t urlPath[1024] = { 0 };
