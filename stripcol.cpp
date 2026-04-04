@@ -87,6 +87,8 @@ void StripCol::ConnectToGateway() {
 
 void StripCol::DisconnectFromGateway() {
     wsClient->Disconnect();
+    std::lock_guard<std::mutex> lock(codeMutex);
+    pairingCode.clear();
 }
 
 void StripCol::HandleWebSocketMessage(const std::string& message) {
@@ -538,6 +540,12 @@ void StripCol::HandleAssumedState(CFlightPlan& fp, const std::string& callsign, 
 }
 
 void StripCol::OnControllerPositionUpdate(CController Controller) {
+    CController myself = ControllerMyself();
+    if (!myself.IsValid() || std::string(Controller.GetCallsign()) != std::string(myself.GetCallsign())) return;
+
+    if (wsClient->IsRunning()) {
+        DisconnectFromGateway();
+    }
     connectionRequested = true;
 }
 
