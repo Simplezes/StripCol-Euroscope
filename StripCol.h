@@ -42,6 +42,8 @@ private:
 
     bool enableClearanceAndSquawk = true;
 
+    std::shared_ptr<std::atomic<bool>> m_alive;
+
     std::unordered_map<std::string, bool> customClearanceFlags;
     std::mutex clearanceMutex;
 

@@ -58,7 +58,7 @@ namespace FlightPlanManager
             return false;
         }
 
-        return false;
+        return true;
     }
 
     static std::vector<std::string> GetProcedureWaypoints(

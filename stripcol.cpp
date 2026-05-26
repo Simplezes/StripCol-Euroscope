@@ -19,6 +19,7 @@ StripCol::StripCol()
               StripColConstants::PLUGIN_AUTHOR.c_str(),
               StripColConstants::PLUGIN_COPYRIGHT.c_str())
 {
+    m_alive = std::make_shared<std::atomic<bool>>(true);
 
     wsClient = std::make_unique<WebSocketClient>(gatewayAddress, "3000",
                                                  [this](const std::string &msg)
@@ -67,6 +68,7 @@ StripCol::StripCol()
 
 StripCol::~StripCol()
 {
+    *m_alive = false;
     DisconnectFromGateway();
 }
 
@@ -1104,9 +1106,11 @@ void StripCol::FetchGlobalData()
     if (apiKey.empty() || baseUrl.empty())
         return;
 
-    HttpClient::GetAsync(baseUrl + "/squawklog", apiKey, [this](bool success, const std::string &response)
+    auto alive = m_alive;
+
+    HttpClient::GetAsync(baseUrl + "/squawklog", apiKey, [this, alive](bool success, const std::string &response)
                          {
-        if (!success) return;
+        if (!*alive || !success) return;
         std::unordered_set<std::string> incomingSquawks;
         std::stringstream ss(response);
         std::string line;
@@ -1121,9 +1125,9 @@ void StripCol::FetchGlobalData()
         std::lock_guard<std::mutex> lock(globalSquawkMutex);
         globalSquawks = std::move(incomingSquawks); });
 
-    HttpClient::GetAsync(baseUrl + "/clearancelog", apiKey, [this](bool success, const std::string &response)
+    HttpClient::GetAsync(baseUrl + "/clearancelog", apiKey, [this, alive](bool success, const std::string &response)
                          {
-        if (!success) return;
+        if (!*alive || !success) return;
         std::stringstream ss(response);
         std::string line;
         while (std::getline(ss, line)) {

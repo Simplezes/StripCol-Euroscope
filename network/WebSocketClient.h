@@ -62,4 +62,6 @@ private:
     std::queue<std::string> outgoingQueue;
     std::mutex queueMutex;
     std::condition_variable queueCV;
+
+    std::vector<unsigned char> m_recvBuffer;
 };

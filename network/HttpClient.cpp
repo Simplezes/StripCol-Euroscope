@@ -1,8 +1,22 @@
 #include "pch.h"
 #include "HttpClient.h"
 #include <vector>
-#include <thread>
+#include <mutex>
+#include <algorithm>
 #include "../common/Utils.h"
+
+static std::mutex s_futuresMutex;
+static std::vector<std::future<void>> s_activeFutures;
+
+static void PruneCompletedFutures()
+{
+    s_activeFutures.erase(
+        std::remove_if(s_activeFutures.begin(), s_activeFutures.end(),
+            [](std::future<void> &f) {
+                return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+            }),
+        s_activeFutures.end());
+}
 
 std::string HttpClient::PerformRequest(const std::string &urlStr, const std::string &method, const std::string &body, const std::string &apiKey)
 {
@@ -127,22 +141,24 @@ std::string HttpClient::Post(const std::string &url, const std::string &body, co
 
 void HttpClient::GetAsync(const std::string &url, const std::string &apiKey, std::function<void(bool, const std::string &)> callback)
 {
-    std::thread([url, apiKey, callback]()
-                {
+    std::lock_guard<std::mutex> lock(s_futuresMutex);
+    PruneCompletedFutures();
+    s_activeFutures.push_back(std::async(std::launch::async, [url, apiKey, callback]()
+    {
         std::string res = HttpClient::Get(url, apiKey);
-        if (callback) {
+        if (callback)
             callback(!res.empty(), res);
-        } })
-        .detach();
+    }));
 }
 
 void HttpClient::PostAsync(const std::string &url, const std::string &body, const std::string &apiKey, std::function<void(bool, const std::string &)> callback)
 {
-    std::thread([url, body, apiKey, callback]()
-                {
+    std::lock_guard<std::mutex> lock(s_futuresMutex);
+    PruneCompletedFutures();
+    s_activeFutures.push_back(std::async(std::launch::async, [url, body, apiKey, callback]()
+    {
         std::string res = HttpClient::Post(url, body, apiKey);
-        if (callback) {
+        if (callback)
             callback(!res.empty(), res);
-        } })
-        .detach();
+    }));
 }

@@ -1,8 +1,10 @@
 #include "pch.h"
 #include "WebSocketClient.h"
 #include "Utils.h"
+#include "../common/Constants.h"
 #include <ws2tcpip.h>
 #include <sstream>
+#include <random>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -63,8 +65,6 @@ void WebSocketClient::WebSocketThread()
         return;
     }
 
-    srand((unsigned int)time(NULL));
-
     auto lastPing = std::chrono::steady_clock::now();
 
     while (running)
@@ -83,7 +83,7 @@ void WebSocketClient::WebSocketThread()
             ProcessOutgoingQueue();
 
             auto now = std::chrono::steady_clock::now();
-            if (std::chrono::duration_cast<std::chrono::seconds>(now - lastPing).count() >= 30)
+            if (std::chrono::duration_cast<std::chrono::seconds>(now - lastPing).count() >= StripColConstants::WEBSOCKET_PING_INTERVAL_SEC)
             {
                 SendMessage("{\"type\":\"ping\"}");
                 lastPing = now;
@@ -103,6 +103,7 @@ void WebSocketClient::WebSocketThread()
         if (running)
         {
             Utils::LogMessage("Connection lost, retrying...");
+            m_recvBuffer.clear();
             std::this_thread::sleep_for(std::chrono::seconds(5));
         }
     }
@@ -185,7 +186,7 @@ bool WebSocketClient::AttemptConnection()
     }
 
     int flag = 1;
-    setsockopt(wsSocket, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
+    setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
     wsConnected = true;
 
     SendMessage("{\"type\":\"sync-request\"}");
@@ -237,8 +238,12 @@ void WebSocketClient::SendWebSocketFrame(const std::string &message)
     frame.push_back(0x81);
 
     unsigned char maskKey[4];
-    for (int i = 0; i < 4; i++)
-        maskKey[i] = (unsigned char)(rand() % 256);
+    {
+        thread_local std::mt19937 rng(std::random_device{}());
+        std::uniform_int_distribution<unsigned int> byteDist(0, 255);
+        for (int i = 0; i < 4; i++)
+            maskKey[i] = static_cast<unsigned char>(byteDist(rng));
+    }
 
     if (msgLen < 126)
     {
@@ -252,6 +257,7 @@ void WebSocketClient::SendWebSocketFrame(const std::string &message)
     }
     else
     {
+        Utils::LogMessage("Message too large to send (" + std::to_string(msgLen) + " bytes), dropping");
         return;
     }
 
@@ -269,7 +275,6 @@ void WebSocketClient::SendWebSocketFrame(const std::string &message)
 
 void WebSocketClient::ReceiveMessages()
 {
-    char buffer[16384];
     fd_set readfds;
     FD_ZERO(&readfds);
 
@@ -281,69 +286,112 @@ void WebSocketClient::ReceiveMessages()
     }
 
     timeval timeout{0, 50000};
-    int activity = select(0, &readfds, NULL, NULL, &timeout);
+    if (select(0, &readfds, NULL, NULL, &timeout) <= 0)
+        return;
 
-    if (activity > 0)
+    char buf[4096];
+    int bytesRead;
     {
-        int bytesRead;
+        std::lock_guard<std::mutex> lock(wsMutex);
+        if (wsSocket == INVALID_SOCKET)
+            return;
+        bytesRead = recv(wsSocket, buf, sizeof(buf), 0);
+    }
+
+    if (bytesRead <= 0)
+    {
+        wsConnected = false;
+        Utils::LogMessage("Connection closed by server");
+        return;
+    }
+
+    m_recvBuffer.insert(m_recvBuffer.end(),
+                        reinterpret_cast<unsigned char *>(buf),
+                        reinterpret_cast<unsigned char *>(buf) + bytesRead);
+
+    // Guard against unbounded growth from malformed frames
+    const size_t MAX_RECV_BUFFER = 1 * 1024 * 1024; // 1 MB
+    if (m_recvBuffer.size() > MAX_RECV_BUFFER)
+    {
+        Utils::LogMessage("Receive buffer exceeded 1 MB, dropping connection");
+        wsConnected = false;
+        m_recvBuffer.clear();
+        return;
+    }
+
+    // Process all complete frames available in the buffer
+    while (m_recvBuffer.size() >= 2)
+    {
+        unsigned char opcode = m_recvBuffer[0] & 0x0F;
+        bool masked = (m_recvBuffer[1] & 0x80) != 0;
+        size_t lenByte = m_recvBuffer[1] & 0x7F;
+
+        // Determine extended payload length size
+        size_t extLenBytes = 0;
+        if (lenByte == 126)
+            extLenBytes = 2;
+        else if (lenByte == 127)
+            extLenBytes = 8;
+
+        // Wait for enough bytes to read extended length field
+        if (m_recvBuffer.size() < 2 + extLenBytes)
+            break;
+
+        size_t payloadLen = lenByte;
+        if (lenByte == 126)
         {
-            std::lock_guard<std::mutex> lock(wsMutex);
-            if (wsSocket == INVALID_SOCKET)
-                return;
-            bytesRead = recv(wsSocket, buffer, sizeof(buffer) - 1, 0);
+            payloadLen = (static_cast<size_t>(m_recvBuffer[2]) << 8) | m_recvBuffer[3];
+        }
+        else if (lenByte == 127)
+        {
+            payloadLen = 0;
+            for (int i = 0; i < 8; i++)
+                payloadLen = (payloadLen << 8) | m_recvBuffer[2 + i];
         }
 
-        if (bytesRead <= 0)
+        size_t maskOffset = 2 + extLenBytes;
+        size_t payloadStart = maskOffset + (masked ? 4 : 0);
+        size_t totalLen = payloadStart + payloadLen;
+
+        // Wait until the full frame has arrived
+        if (m_recvBuffer.size() < totalLen)
+            break;
+
+        if (opcode == 0x08) // close
         {
             wsConnected = false;
             Utils::LogMessage("Connection closed by server");
+            m_recvBuffer.erase(m_recvBuffer.begin(), m_recvBuffer.begin() + totalLen);
             return;
         }
-
-        if (bytesRead >= 2)
+        else if (opcode == 0x09) // ping → send pong
         {
-            unsigned char opcode = buffer[0] & 0x0F;
-            if (opcode == 0x08)
-            {
-                wsConnected = false;
-                return;
-            }
-            else if (opcode == 0x09)
-            {
-                unsigned char pong[] = {0x8A, 0x80, 0x00, 0x00, 0x00, 0x00};
-                std::lock_guard<std::mutex> lock(wsMutex);
-                if (wsSocket != INVALID_SOCKET)
-                    send(wsSocket, (const char *)pong, sizeof(pong), 0);
-            }
-            else if (opcode == 0x01)
-            {
-                unsigned char payloadLen = buffer[1] & 0x7F;
-                int payloadStart = 2;
-                size_t actualLen = payloadLen;
-
-                if (payloadLen == 126)
-                {
-                    actualLen = (static_cast<unsigned char>(buffer[2]) << 8) | static_cast<unsigned char>(buffer[3]);
-                    payloadStart = 4;
-                }
-                else if (payloadLen == 127)
-                {
-                    actualLen = 0;
-                    for (int i = 0; i < 8; i++)
-                        actualLen = (actualLen << 8) | static_cast<unsigned char>(buffer[2 + i]);
-                    payloadStart = 10;
-                }
-
-                if (payloadStart + actualLen <= static_cast<size_t>(bytesRead))
-                {
-                    std::string message(buffer + payloadStart, actualLen);
-                    if (onMessageReceived)
-                    {
-                        onMessageReceived(message);
-                    }
-                }
-            }
+            unsigned char pong[] = {0x8A, 0x80, 0x00, 0x00, 0x00, 0x00};
+            std::lock_guard<std::mutex> lock(wsMutex);
+            if (wsSocket != INVALID_SOCKET)
+                send(wsSocket, reinterpret_cast<const char *>(pong), sizeof(pong), 0);
         }
+        else if (opcode == 0x01 || opcode == 0x02) // text or binary
+        {
+            std::string payload;
+            payload.reserve(payloadLen);
+
+            if (masked)
+            {
+                const unsigned char *key = &m_recvBuffer[maskOffset];
+                for (size_t i = 0; i < payloadLen; i++)
+                    payload.push_back(static_cast<char>(m_recvBuffer[payloadStart + i] ^ key[i % 4]));
+            }
+            else
+            {
+                payload.assign(reinterpret_cast<const char *>(&m_recvBuffer[payloadStart]), payloadLen);
+            }
+
+            if (onMessageReceived)
+                onMessageReceived(payload);
+        }
+
+        m_recvBuffer.erase(m_recvBuffer.begin(), m_recvBuffer.begin() + totalLen);
     }
 }
 
