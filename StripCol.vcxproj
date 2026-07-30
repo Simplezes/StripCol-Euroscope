@@ -158,7 +158,6 @@
     <ClInclude Include="network\HttpClient.h" />
     <ClInclude Include="logic\FlightPlanManager.h" />
     <ClInclude Include="StripCol.h" />
-    <ClInclude Include="squawk\SquawkManager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
@@ -173,7 +172,6 @@
     <ClCompile Include="network\WebSocketClient.cpp" />
     <ClCompile Include="network\HttpClient.cpp" />
     <ClCompile Include="logic\FlightPlanManager.cpp" />
-    <ClCompile Include="squawk\SquawkManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

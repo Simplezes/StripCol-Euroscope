@@ -362,9 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 
-# StripCol: secrets file — copy Secrets.h.example to Secrets.h and fill in your values
-common/Secrets.h
-
 # StripCol: keep the EuroScope SDK header (manual dependency, not NuGet-restorable)
 !**/[Pp]ackages/[Ee]uroscope/
 !**/[Pp]ackages/[Ee]uroscope/**

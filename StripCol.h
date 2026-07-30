@@ -2,7 +2,6 @@
 
 #include "EuroScopePlugIn.h"
 #include "WebSocketClient.h"
-#include "squawk/SquawkManager.h"
 #include <string>
 #include <unordered_set>
 #include <unordered_map>
@@ -11,18 +10,12 @@
 #include <atomic>
 #include <functional>
 
-const int TAG_ITEM_SIMULATED_CLEARANCE = 101;
 const int TAG_ITEM_SQUAWK = 102;
-const int TAG_FUNC_TOGGLE_CLEARANCE = 101;
 const int TAG_FUNC_ASSIGN_SQUAWK = 102;
-const int TAG_FUNC_DO_AUTO_SQUAWK = 103;
-const int TAG_FUNC_MANUAL_SQUAWK_INPUT = 104;
 
 class StripCol : public EuroScopePlugIn::CPlugIn
 {
 private:
-    std::unique_ptr<SquawkManager> squawkManager;
-
     std::unique_ptr<WebSocketClient> wsClient;
     std::mutex gatewayMutex;
     std::string gatewayAddress = "127.0.0.1";
@@ -40,15 +33,7 @@ private:
     std::unordered_set<std::string> transferToMeAircraft;
     std::mutex transferMutex;
 
-    bool enableClearanceAndSquawk = true;
-
-    std::shared_ptr<std::atomic<bool>> m_alive;
-
-    std::unordered_map<std::string, bool> customClearanceFlags;
-    std::mutex clearanceMutex;
-
-    std::unordered_set<std::string> globalSquawks;
-    std::mutex globalSquawkMutex;
+    bool enableSquawkAssignment = true;
 
     struct PendingTask
     {
@@ -65,8 +50,6 @@ public:
     StripCol();
     virtual ~StripCol();
 
-    void FetchGlobalData();
-    bool IsSquawkUsedGlobally(const std::string &squawk);
     void GetPointTime(const std::string &callsign, const std::string &points, std::function<void(bool, const std::string &)> callback);
 
     void OnTimer(int Counter) override;
@@ -97,7 +80,6 @@ private:
     void DisconnectFromGateway();
     void HandleWebSocketMessage(const std::string &message);
     void ProcessPendingTasks();
-    bool GetCustomClearance(const std::string &callsign);
     void SendRegistration();
 
     void SendAtcList(bool force = false);
@@ -123,8 +105,6 @@ private:
     void HandleSync(const std::string &jsonStr);
     void HandleAssumeAircraft(const std::string &jsonStr);
     void HandleGetNearbyAircraft(const std::string &jsonStr);
-    void HandleSetClearance(const std::string &jsonStr);
-    void HandleGenerateSquawk(const std::string &jsonStr);
 
     std::string GetJsonValue(const std::string &jsonStr, const std::string &key);
 };

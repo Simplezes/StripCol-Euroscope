@@ -5,7 +5,6 @@
 #include <fstream>
 #include <unordered_set>
 #include <nlohmann/json.hpp>
-#include "../network/HttpClient.h"
 
 using json = nlohmann::json;
 
@@ -16,25 +15,8 @@ namespace FlightPlanManager
 
     static json g_procedures;
 
-    bool LoadProcedures(const std::string &filename, const std::string &baseUrl, const std::string &apiKey)
+    bool LoadProcedures(const std::string &filename)
     {
-        if (!baseUrl.empty())
-        {
-            try
-            {
-                std::string response = HttpClient::Get(baseUrl + "/files/procedures", apiKey);
-                if (!response.empty())
-                {
-                    json parsed = json::parse(response);
-                    g_procedures = std::move(parsed);
-                    return true;
-                }
-            }
-            catch (...)
-            {
-            }
-        }
-
         try
         {
             std::string fullPath = filename;
@@ -94,7 +76,7 @@ namespace FlightPlanManager
         return hasNumbers && hasLetters;
     }
 
-    std::string BuildAircraftJson(EuroScopePlugIn::CFlightPlan fp, bool customClearance)
+    std::string BuildAircraftJson(EuroScopePlugIn::CFlightPlan fp)
     {
         if (!fp.IsValid())
             return "{}";
@@ -120,7 +102,7 @@ namespace FlightPlanManager
         j["route"] = data.GetRoute() ? data.GetRoute() : "";
         j["remarks"] = data.GetRemarks() ? data.GetRemarks() : "";
         j["groundState"] = fp.GetGroundState();
-        j["clearedFlag"] = (customClearance || fp.GetClearenceFlag()) ? 1 : 0;
+        j["clearedFlag"] = fp.GetClearenceFlag() ? 1 : 0;
 
         const char *origin = data.GetOrigin();
         const char *destination = data.GetDestination();

@@ -12,7 +12,7 @@ EuroScope plugin that syncs your ATC session in real time over WebSocket. It con
 | `.stripset <IP>` | Point the plugin at a different gateway (defaults to `127.0.0.1`). |
 | `.striprestart` | Reconnect to the gateway. |
 | `.stripcode` | Show your current pairing code. |
-| `.stripclearance` | Turn the Clearance & Squawk feature on or off. |
+| `.stripsquawk` | Turn the Squawk Assignment feature on or off. |
 
 ---
 
@@ -41,8 +41,6 @@ Once connected, the plugin generates a short code like `A7X9Q`. Share this with 
 1. Open `StripCol.sln` in Visual Studio 2022.
 2. Select the **Release | x64** configuration.
 3. Press `Ctrl+Shift+B`. The output `StripCol.dll` will be in `x64/Release/`.
-
-> If you plan to use the **Clearance & Squawk** feature, also copy `common/Secrets.h.example` to `common/Secrets.h` and fill in your server details before building.
 
 ---
 
