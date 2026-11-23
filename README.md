@@ -39,8 +39,8 @@ Once connected, the plugin generates a short code like `A7X9Q`. Share this with 
 
 **Steps:**
 1. Open `StripCol.sln` in Visual Studio 2022.
-2. Select the **Release | x64** configuration.
-3. Press `Ctrl+Shift+B`. The output `StripCol.dll` will be in `x64/Release/`.
+2. Select the **Release | Win32** configuration (EuroScope is 32-bit).
+3. Press `Ctrl+Shift+B`. The output `StripCol.dll` will be in `Release/`.
 
 ---
 
