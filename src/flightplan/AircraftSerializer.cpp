@@ -140,6 +140,7 @@ namespace AircraftSerializer
         aircraft["route"] = FromCString(data.GetRoute());
         aircraft["remarks"] = FromCString(data.GetRemarks());
         aircraft["groundState"] = FromCString(flightPlan.GetGroundState());
+        aircraft["clearanceReceived"] = flightPlan.GetClearenceFlag();
         aircraft["departurePoints"] = std::move(departurePoints);
         aircraft["arrivalPoints"] = std::move(arrivalPoints);
         aircraft["clearedAltitude"] = assigned.GetClearedAltitude();
