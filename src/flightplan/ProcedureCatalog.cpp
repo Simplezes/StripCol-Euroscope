@@ -35,13 +35,17 @@ std::string ProcedureCatalog::MakeKey(const std::string &airport,
 
 bool ProcedureCatalog::Load(const std::string &path)
 {
-    procedures_.clear();
-
     std::ifstream file(path);
     if (!file.is_open())
         return false;
 
-    json root = json::parse(file, nullptr, false);
+    return LoadFromJson(json::parse(file, nullptr, false));
+}
+
+bool ProcedureCatalog::LoadFromJson(const json &root)
+{
+    procedures_.clear();
+
     if (!root.is_object())
         return false;
 

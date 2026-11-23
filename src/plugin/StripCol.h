@@ -3,6 +3,7 @@
 #include "EuroScopePlugIn.h"
 #include "flightplan/ProcedureCatalog.h"
 #include "gateway/GatewayLink.h"
+#include "sector/SectorParser.h"
 #include "sync/AircraftTracker.h"
 #include "sync/AtcListSync.h"
 #include <string>
@@ -48,10 +49,15 @@ private:
     void RunRestartCommand();
     void RunPairingCodeCommand();
     void RunToggleSquawkCommand();
+    void RunSectorFileCommand(const std::string &argument);
+    void LoadSectorData();
+    void SendSectorData();
 
     ProcedureCatalog catalog_;
     GatewayLink link_;
     AircraftTracker tracker_;
     AtcListSync atcList_;
+    std::string sectorMessage_;
+    std::string sectorPath_;
     bool squawkAssignmentEnabled_ = true;
 };

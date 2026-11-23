@@ -1,7 +1,9 @@
 #include "pch.h"
 #include "plugin/StripCol.h"
 #include "common/Constants.h"
+#include "common/ModulePath.h"
 #include "common/Text.h"
+#include "sector/SectorFileLocator.h"
 
 bool StripCol::OnCompileCommand(const char *sCommandLine)
 {
@@ -16,6 +18,8 @@ bool StripCol::OnCompileCommand(const char *sCommandLine)
         RunRestartCommand();
     else if (command == ".stripset")
         RunSetGatewayCommand(argument);
+    else if (command == ".stripsector")
+        RunSectorFileCommand(argument);
     else if (command == ".stripcode")
         RunPairingCodeCommand();
     else
@@ -53,6 +57,25 @@ void StripCol::RunSetGatewayCommand(const std::string &argument)
 
     link_.SetHost(host);
     Notify("Gateway", "Gateway set to: " + host);
+}
+
+void StripCol::RunSectorFileCommand(const std::string &argument)
+{
+    if (argument.empty())
+    {
+        Notify("Sector", sectorPath_.empty() ? "No sector extension file loaded." : "Sector file: " + sectorPath_);
+        return;
+    }
+
+    if (!SectorFileLocator::SaveOverride(ModulePath::Directory(), argument))
+    {
+        Notify("Sector", "Could not save the sector file path.");
+        return;
+    }
+
+    LoadSectorData();
+    SendSectorData();
+    Notify("Sector", sectorMessage_.empty() ? "Could not read procedures from: " + argument : "Loaded sector file: " + argument);
 }
 
 void StripCol::RunPairingCodeCommand()

@@ -23,6 +23,15 @@ namespace Messages
         return JsonFields::Dump(message);
     }
 
+    std::string SectorDataMessage(const SectorData &data)
+    {
+        nlohmann::json message;
+        message["type"] = "sector-data";
+        message["data"]["procedures"] = data.procedures;
+        message["data"]["sectors"] = data.sectors;
+        return JsonFields::Dump(message);
+    }
+
     std::string NearbyAircraft(const std::vector<std::string> &callsigns)
     {
         nlohmann::json message;

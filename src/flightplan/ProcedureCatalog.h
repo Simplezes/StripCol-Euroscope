@@ -3,6 +3,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 enum class ProcedureType
 {
@@ -14,6 +15,7 @@ class ProcedureCatalog
 {
 public:
     bool Load(const std::string &path);
+    bool LoadFromJson(const nlohmann::json &root);
 
     const std::vector<std::string> &Waypoints(const std::string &airport,
                                               ProcedureType type,

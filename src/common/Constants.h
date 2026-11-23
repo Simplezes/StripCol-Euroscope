@@ -10,6 +10,7 @@ namespace StripColConstants
     constexpr const char *DEFAULT_GATEWAY = "127.0.0.1";
     constexpr const char *GATEWAY_PORT = "3000";
     constexpr const char *PROCEDURES_FILE = "data\\procedures.json";
+    constexpr const char *SECTOR_PATH_FILE = "data\\sector-path.txt";
 
     constexpr int PING_INTERVAL_SECONDS = 15;
     constexpr int INBOUND_SILENCE_LIMIT_SECONDS = 45;
