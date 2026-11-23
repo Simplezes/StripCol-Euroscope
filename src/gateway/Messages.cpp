@@ -1,0 +1,33 @@
+#include "pch.h"
+#include "gateway/Messages.h"
+#include "gateway/JsonFields.h"
+#include <nlohmann/json.hpp>
+
+namespace Messages
+{
+    std::string Envelope(const char *type, const std::string &dataJson)
+    {
+        std::string message = "{\"type\":\"";
+        message += type;
+        message += "\",\"data\":";
+        message += dataJson;
+        message += "}";
+        return message;
+    }
+
+    std::string Release(const std::string &callsign)
+    {
+        nlohmann::json message;
+        message["type"] = "release";
+        message["callsign"] = callsign;
+        return JsonFields::Dump(message);
+    }
+
+    std::string NearbyAircraft(const std::vector<std::string> &callsigns)
+    {
+        nlohmann::json message;
+        message["type"] = "nearby-aircraft";
+        message["data"] = callsigns;
+        return JsonFields::Dump(message);
+    }
+}

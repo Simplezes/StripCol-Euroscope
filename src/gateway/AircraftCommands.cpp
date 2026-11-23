@@ -1,227 +1,244 @@
 #include "pch.h"
-#include "plugin/StripCol.h"
-#include "flightplan/FlightPlanManager.h"
-#include <nlohmann/json.hpp>
+#include "gateway/AircraftCommands.h"
+#include "common/Constants.h"
+#include "common/Log.h"
+#include "common/Text.h"
+#include "flightplan/RouteEditor.h"
+#include "gateway/JsonFields.h"
+#include "gateway/Messages.h"
 
 using namespace EuroScopePlugIn;
-using json = nlohmann::json;
+using namespace StripColConstants;
 
-namespace
+namespace AircraftCommands
 {
-    constexpr int MAX_ASSIGNED_SPEED = 500;
-    constexpr double MACH_SCALE = 100.0;
-    constexpr double NEARBY_AIRCRAFT_RANGE_NM = 50.0;
-}
-
-CFlightPlan StripCol::SelectFlightPlan(const std::string &jsonStr)
-{
-    std::string callsign = GetJsonValue(jsonStr, "callsign");
-    if (callsign.empty())
-        return CFlightPlan();
-
-    return FlightPlanSelect(callsign.c_str());
-}
-
-void StripCol::ApplyIntegerCommand(const std::string &jsonStr, const char *key,
-                                   const std::function<void(CFlightPlan &, int)> &apply)
-{
-    std::string valueText = GetJsonValue(jsonStr, key);
-    if (valueText.empty())
-        return;
-
-    try
+    namespace
     {
-        int value = std::stoi(valueText);
-        CFlightPlan fp = SelectFlightPlan(jsonStr);
-        if (fp.IsValid())
-            apply(fp, value);
-    }
-    catch (...)
-    {
-    }
-}
-
-void StripCol::HandleSetClearedAltitude(const std::string &jsonStr)
-{
-    ApplyIntegerCommand(jsonStr, "clearedAltitude", [](CFlightPlan &fp, int altitude)
-                        { fp.GetControllerAssignedData().SetClearedAltitude(altitude); });
-}
-
-void StripCol::HandleSetAssignedHeading(const std::string &jsonStr)
-{
-    ApplyIntegerCommand(jsonStr, "assignedHeading", [](CFlightPlan &fp, int heading)
-                        { fp.GetControllerAssignedData().SetAssignedHeading(heading); });
-}
-
-void StripCol::HandleSetAssignedSpeed(const std::string &jsonStr)
-{
-    ApplyIntegerCommand(jsonStr, "assignedSpeed", [](CFlightPlan &fp, int speed)
-                        {
-        if (speed >= 0 && speed <= MAX_ASSIGNED_SPEED)
-            fp.GetControllerAssignedData().SetAssignedSpeed(speed); });
-}
-
-void StripCol::HandleSetFinalAltitude(const std::string &jsonStr)
-{
-    ApplyIntegerCommand(jsonStr, "finalAltitude", [](CFlightPlan &fp, int altitude)
-                        { fp.GetControllerAssignedData().SetFinalAltitude(altitude); });
-}
-
-void StripCol::HandleSetAssignedMach(const std::string &jsonStr)
-{
-    std::string machText = GetJsonValue(jsonStr, "assignedMach");
-    if (machText.empty())
-        return;
-
-    try
-    {
-        int scaledMach = static_cast<int>(std::stod(machText) * MACH_SCALE);
-        CFlightPlan fp = SelectFlightPlan(jsonStr);
-        if (fp.IsValid())
-            fp.GetControllerAssignedData().SetAssignedMach(scaledMach);
-    }
-    catch (...)
-    {
-    }
-}
-
-void StripCol::HandleSetSquawk(const std::string &jsonStr)
-{
-    std::string squawk = GetJsonValue(jsonStr, "squawk");
-    CFlightPlan fp = SelectFlightPlan(jsonStr);
-    if (!squawk.empty() && fp.IsValid())
-        fp.GetControllerAssignedData().SetSquawk(squawk.c_str());
-}
-
-void StripCol::HandleSetDepartureTime(const std::string &jsonStr)
-{
-    std::string departureTime = GetJsonValue(jsonStr, "Dtime");
-    CFlightPlan fp = SelectFlightPlan(jsonStr);
-    if (!departureTime.empty() && fp.IsValid())
-        fp.GetFlightPlanData().SetActualDepartureTime(departureTime.c_str());
-}
-
-void StripCol::HandleSetDirectPoint(const std::string &jsonStr)
-{
-    std::string pointName = GetJsonValue(jsonStr, "pointName");
-    CFlightPlan fp = SelectFlightPlan(jsonStr);
-    if (pointName.empty() || !fp.IsValid())
-        return;
-
-    CFlightPlanExtractedRoute route = fp.GetExtractedRoute();
-    for (int index = 0; index < route.GetPointsNumber(); index++)
-    {
-        const char *name = route.GetPointName(index);
-        if (name && pointName == name)
+        struct Target
         {
-            fp.GetControllerAssignedData().SetDirectToPointName(pointName.c_str());
-            return;
+            CFlightPlan flightPlan;
+            std::string callsign;
+        };
+
+        bool FindTarget(CommandContext &context, const nlohmann::json &message, Target &target)
+        {
+            target.callsign = JsonFields::String(message, "callsign");
+            if (target.callsign.empty())
+                return false;
+
+            target.flightPlan = context.plugin.FlightPlanSelect(target.callsign.c_str());
+            return target.flightPlan.IsValid();
+        }
+
+        void Reject(const char *command, const std::string &reason)
+        {
+            Log::Write(std::string("Ignored ") + command + ": " + reason);
         }
     }
-}
 
-void StripCol::HandleSetSid(const std::string &jsonStr)
-{
-    std::string sid = GetJsonValue(jsonStr, "sid");
-    std::string runway = GetJsonValue(jsonStr, "runway");
-    CFlightPlan fp = SelectFlightPlan(jsonStr);
-    if (sid.empty() || !fp.IsValid())
-        return;
-
-    std::string message;
-    FlightPlanManager::SetSidForFlight(fp, sid, runway, message);
-}
-
-void StripCol::HandleSetStar(const std::string &jsonStr)
-{
-    std::string star = GetJsonValue(jsonStr, "star");
-    std::string runway = GetJsonValue(jsonStr, "runway");
-    CFlightPlan fp = SelectFlightPlan(jsonStr);
-    if (star.empty() || !fp.IsValid())
-        return;
-
-    std::string message;
-    FlightPlanManager::SetStarForFlight(fp, star, runway, message);
-}
-
-void StripCol::HandleAcceptHandoff(const std::string &jsonStr)
-{
-    CFlightPlan fp = SelectFlightPlan(jsonStr);
-    if (fp.IsValid())
-        fp.AcceptHandoff();
-}
-
-void StripCol::HandleRefuseHandoff(const std::string &jsonStr)
-{
-    CFlightPlan fp = SelectFlightPlan(jsonStr);
-    if (fp.IsValid())
-        fp.RefuseHandoff();
-}
-
-void StripCol::HandleAtcTransfer(const std::string &jsonStr)
-{
-    std::string targetController = GetJsonValue(jsonStr, "targetATC");
-    CFlightPlan fp = SelectFlightPlan(jsonStr);
-    if (!targetController.empty() && fp.IsValid())
-        fp.InitiateHandoff(targetController.c_str());
-}
-
-void StripCol::HandleAssumeAircraft(const std::string &jsonStr)
-{
-    CFlightPlan fp = SelectFlightPlan(jsonStr);
-    if (fp.IsValid() && fp.GetState() != EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED)
-        fp.StartTracking();
-}
-
-void StripCol::HandleEndTracking(const std::string &jsonStr)
-{
-    std::string callsign = GetJsonValue(jsonStr, "callsign");
-    if (callsign.empty())
-        return;
-
-    CFlightPlan fp = FlightPlanSelect(callsign.c_str());
-    if (fp.IsValid())
-        fp.EndTracking();
-
+    void SetClearedAltitude(CommandContext &context, const nlohmann::json &message)
     {
-        std::lock_guard<std::mutex> lock(aircraftMutex);
-        assumedAircraft.erase(callsign);
-        lastAircraftData.erase(callsign);
+        Target target;
+        auto altitude = JsonFields::Integer(message, "clearedAltitude");
+        if (!altitude || !FindTarget(context, message, target))
+            return Reject("set-cleared-alt", "missing flight or altitude");
+
+        target.flightPlan.GetControllerAssignedData().SetClearedAltitude(*altitude);
+        context.tracker.MarkDirty(target.callsign);
     }
 
-    json release;
-    release["type"] = "release";
-    release["callsign"] = callsign;
-    wsClient->SendMessage(release.dump());
-}
-
-void StripCol::HandleGetNearbyAircraft(const std::string &jsonStr)
-{
-    CController myself = ControllerMyself();
-    if (!myself.IsValid())
-        return;
-
-    std::vector<std::string> callsigns;
-    CPosition myPosition = myself.GetPosition();
-
-    for (CFlightPlan fp = FlightPlanSelectFirst(); fp.IsValid(); fp = FlightPlanSelectNext(fp))
+    void SetFinalAltitude(CommandContext &context, const nlohmann::json &message)
     {
-        int state = fp.GetState();
-        if (state == EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED ||
-            state == EuroScopePlugIn::FLIGHT_PLAN_STATE_REDUNDANT)
-            continue;
+        Target target;
+        auto altitude = JsonFields::Integer(message, "finalAltitude");
+        if (!altitude || !FindTarget(context, message, target))
+            return Reject("set-final-alt", "missing flight or altitude");
 
-        CRadarTarget target = RadarTargetSelect(fp.GetCallsign());
-        if (!target.IsValid())
-            continue;
-
-        double distance = myPosition.DistanceTo(target.GetPosition().GetPosition());
-        if (distance <= NEARBY_AIRCRAFT_RANGE_NM)
-            callsigns.push_back(fp.GetCallsign());
+        target.flightPlan.GetControllerAssignedData().SetFinalAltitude(*altitude);
+        context.tracker.MarkDirty(target.callsign);
     }
 
-    json response;
-    response["type"] = "nearby-aircraft";
-    response["data"] = callsigns;
-    wsClient->SendMessage(response.dump());
+    void SetAssignedHeading(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        auto heading = JsonFields::Integer(message, "assignedHeading");
+        if (!heading || *heading < 0 || *heading > MAX_HEADING || !FindTarget(context, message, target))
+            return Reject("set-assigned-heading", "missing flight or invalid heading");
+
+        target.flightPlan.GetControllerAssignedData().SetAssignedHeading(*heading);
+        context.tracker.MarkDirty(target.callsign);
+    }
+
+    void SetAssignedSpeed(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        auto speed = JsonFields::Integer(message, "assignedSpeed");
+        if (!speed || *speed < 0 || *speed > MAX_ASSIGNED_SPEED || !FindTarget(context, message, target))
+            return Reject("set-assigned-speed", "missing flight or invalid speed");
+
+        target.flightPlan.GetControllerAssignedData().SetAssignedSpeed(*speed);
+        context.tracker.MarkDirty(target.callsign);
+    }
+
+    void SetAssignedMach(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        auto mach = JsonFields::Number(message, "assignedMach");
+        if (!mach || *mach < 0 || *mach > MAX_ASSIGNED_MACH || !FindTarget(context, message, target))
+            return Reject("set-assigned-mach", "missing flight or invalid mach");
+
+        target.flightPlan.GetControllerAssignedData().SetAssignedMach(static_cast<int>(*mach * MACH_SCALE + 0.5));
+        context.tracker.MarkDirty(target.callsign);
+    }
+
+    void SetSquawk(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        std::string squawk = JsonFields::String(message, "squawk");
+        if (!Text::IsValidSquawk(squawk) || !FindTarget(context, message, target))
+            return Reject("set-squawk", "missing flight or invalid squawk");
+
+        target.flightPlan.GetControllerAssignedData().SetSquawk(squawk.c_str());
+        context.tracker.MarkDirty(target.callsign);
+    }
+
+    void SetDepartureTime(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        std::string departureTime = JsonFields::String(message, "Dtime");
+        if (departureTime.empty() || !FindTarget(context, message, target))
+            return Reject("set-departureTime", "missing flight or time");
+
+        target.flightPlan.GetFlightPlanData().SetActualDepartureTime(departureTime.c_str());
+        context.tracker.MarkDirty(target.callsign);
+    }
+
+    void SetDirectPoint(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        std::string pointName = JsonFields::String(message, "pointName");
+        if (pointName.empty() || !FindTarget(context, message, target))
+            return Reject("set-direct-point", "missing flight or point");
+
+        CFlightPlanExtractedRoute route = target.flightPlan.GetExtractedRoute();
+        for (int index = 0; index < route.GetPointsNumber(); index++)
+        {
+            const char *name = route.GetPointName(index);
+            if (name && pointName == name)
+            {
+                target.flightPlan.GetControllerAssignedData().SetDirectToPointName(pointName.c_str());
+                context.tracker.MarkDirty(target.callsign);
+                return;
+            }
+        }
+        Reject("set-direct-point", pointName + " is not on the route");
+    }
+
+    void SetSid(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        std::string sid = JsonFields::String(message, "sid");
+        std::string runway = JsonFields::String(message, "runway");
+        if (sid.empty() || runway.empty() || !FindTarget(context, message, target))
+            return Reject("set-sid", "missing flight, sid or runway");
+
+        if (!RouteEditor::ApplySid(target.flightPlan, sid, runway))
+            return Reject("set-sid", "flight plan could not be amended");
+        context.tracker.MarkDirty(target.callsign);
+    }
+
+    void SetStar(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        std::string star = JsonFields::String(message, "star");
+        std::string runway = JsonFields::String(message, "runway");
+        if (star.empty() || runway.empty() || !FindTarget(context, message, target))
+            return Reject("set-star", "missing flight, star or runway");
+
+        if (!RouteEditor::ApplyStar(target.flightPlan, star, runway))
+            return Reject("set-star", "flight plan could not be amended");
+        context.tracker.MarkDirty(target.callsign);
+    }
+
+    void AssumeAircraft(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        if (!FindTarget(context, message, target))
+            return Reject("assume-aircraft", "unknown flight");
+
+        if (target.flightPlan.GetState() != FLIGHT_PLAN_STATE_ASSUMED)
+            target.flightPlan.StartTracking();
+    }
+
+    void AcceptHandoff(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        if (!FindTarget(context, message, target))
+            return Reject("accept-handoff", "unknown flight");
+
+        target.flightPlan.AcceptHandoff();
+    }
+
+    void RefuseHandoff(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        if (!FindTarget(context, message, target))
+            return Reject("refuse-handoff", "unknown flight");
+
+        target.flightPlan.RefuseHandoff();
+    }
+
+    void TransferToController(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        std::string controller = JsonFields::String(message, "targetATC");
+        if (controller.empty() || !FindTarget(context, message, target))
+            return Reject("ATC-transfer", "missing flight or controller");
+
+        target.flightPlan.InitiateHandoff(controller.c_str());
+        context.tracker.MarkDirty(target.callsign);
+    }
+
+    void EndTracking(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        if (!FindTarget(context, message, target))
+            return Reject("end-tracking", "unknown flight");
+
+        target.flightPlan.EndTracking();
+        context.tracker.Release(target.callsign);
+    }
+
+    void ListNearbyAircraft(CommandContext &context, const nlohmann::json &)
+    {
+        CController myself = context.plugin.ControllerMyself();
+        if (!myself.IsValid())
+            return;
+
+        const CPosition myPosition = myself.GetPosition();
+        std::vector<std::string> callsigns;
+
+        for (CFlightPlan flightPlan = context.plugin.FlightPlanSelectFirst(); flightPlan.IsValid();
+             flightPlan = context.plugin.FlightPlanSelectNext(flightPlan))
+        {
+            const int state = flightPlan.GetState();
+            if (state == FLIGHT_PLAN_STATE_ASSUMED || state == FLIGHT_PLAN_STATE_REDUNDANT)
+                continue;
+
+            CRadarTarget target = context.plugin.RadarTargetSelect(flightPlan.GetCallsign());
+            if (!target.IsValid())
+                continue;
+
+            if (myPosition.DistanceTo(target.GetPosition().GetPosition()) <= NEARBY_AIRCRAFT_RANGE_NM)
+                callsigns.push_back(flightPlan.GetCallsign());
+        }
+
+        context.link.Send(Messages::NearbyAircraft(callsigns));
+    }
+
+    void ResendState(CommandContext &context, const nlohmann::json &)
+    {
+        context.tracker.Resync();
+        context.atcList.Invalidate();
+    }
 }
