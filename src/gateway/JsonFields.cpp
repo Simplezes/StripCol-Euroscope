@@ -58,4 +58,12 @@ namespace JsonFields
             return std::nullopt;
         return static_cast<int>(rounded);
     }
+
+    std::optional<bool> Boolean(const nlohmann::json &message, const char *key)
+    {
+        auto field = message.find(key);
+        if (field == message.end() || !field->is_boolean())
+            return std::nullopt;
+        return field->get<bool>();
+    }
 }

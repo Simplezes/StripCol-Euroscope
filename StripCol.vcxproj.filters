@@ -81,6 +81,9 @@
     <ClInclude Include="src\pch.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="src\plugin\ClearanceScreen.h">
+      <Filter>src\plugin</Filter>
+    </ClInclude>
     <ClInclude Include="src\plugin\StripCol.h">
       <Filter>src\plugin</Filter>
     </ClInclude>
@@ -139,6 +142,9 @@
     </ClCompile>
     <ClCompile Include="src\network\WebSocketFrame.cpp">
       <Filter>src\network</Filter>
+    </ClCompile>
+    <ClCompile Include="src\plugin\ClearanceScreen.cpp">
+      <Filter>src\plugin</Filter>
     </ClCompile>
     <ClCompile Include="src\plugin\Commands.cpp">
       <Filter>src\plugin</Filter>

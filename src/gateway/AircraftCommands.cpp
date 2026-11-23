@@ -102,6 +102,29 @@ namespace AircraftCommands
         context.tracker.MarkDirty(target.callsign);
     }
 
+    void SetClearance(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        auto cleared = JsonFields::Boolean(message, "cleared");
+        if (!cleared || !FindTarget(context, message, target))
+            return Reject("set-clearance", "missing flight or state");
+
+        const bool before = target.flightPlan.GetClearenceFlag();
+        Log::Write("set-clearance " + target.callsign + ": requested=" + (*cleared ? "true" : "false") +
+                   " current=" + (before ? "true" : "false"));
+        if (before == *cleared)
+            return;
+
+        if (!context.screen)
+            return Reject("set-clearance", "no EuroScope radar screen is open");
+
+        context.screen->ToggleClearedFlag(context.plugin, target.flightPlan);
+        const bool after = target.flightPlan.GetClearenceFlag();
+        Log::Write("set-clearance " + target.callsign + ": after tag function=" + (after ? "true" : "false") +
+                   (after == *cleared ? " (ok)" : " (EuroScope did not apply it)"));
+        context.tracker.MarkDirty(target.callsign);
+    }
+
     void SetDepartureTime(CommandContext &context, const nlohmann::json &message)
     {
         Target target;

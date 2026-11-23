@@ -26,6 +26,7 @@ StripCol::StripCol()
         Log::Write("Could not load " + proceduresPath);
 
     LoadSectorData();
+    RegisterDisplayType(StripColConstants::DISPLAY_TYPE_NAME, false, false, true, true);
 }
 
 void StripCol::Notify(const char *category, const std::string &text)
@@ -119,6 +120,18 @@ void StripCol::OnFlightPlanDisconnect(CFlightPlan FlightPlan)
         tracker_.Release(FlightPlan.GetCallsign());
 }
 
+CRadarScreen *StripCol::OnRadarScreenCreated(const char *sDisplayName, bool, bool, bool, bool)
+{
+    const bool isStandard = std::strcmp(sDisplayName, StripColConstants::STANDARD_SCREEN_NAME) == 0;
+    const bool isOwnType = std::strcmp(sDisplayName, StripColConstants::DISPLAY_TYPE_NAME) == 0;
+    Log::Write(std::string("Radar screen created: '") + sDisplayName + "' accepted=" +
+               (isStandard || isOwnType ? "yes" : "no"));
+    if (!isStandard && !isOwnType)
+        return nullptr;
+
+    return new ClearanceScreen(screens_);
+}
+
 void StripCol::OnTimer(int Counter)
 {
     try
@@ -130,7 +143,8 @@ void StripCol::OnTimer(int Counter)
             atcList_.Invalidate();
         }
 
-        CommandContext context{*this, link_, tracker_, atcList_};
+        ClearanceScreen *screen = screens_.empty() ? nullptr : screens_.front();
+        CommandContext context{*this, link_, tracker_, atcList_, screen};
         for (const std::string &message : link_.TakeInbound())
             CommandDispatcher::Dispatch(context, message);
 

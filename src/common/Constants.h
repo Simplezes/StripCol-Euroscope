@@ -6,6 +6,8 @@ namespace StripColConstants
     constexpr const char *PLUGIN_VERSION = "3.0";
     constexpr const char *PLUGIN_AUTHOR = "Simplezes";
     constexpr const char *PLUGIN_COPYRIGHT = "Copyright 2026";
+    constexpr const char *STANDARD_SCREEN_NAME = "Standard ES radar screen";
+    constexpr const char *DISPLAY_TYPE_NAME = "StripCol";
 
     constexpr const char *DEFAULT_GATEWAY = "127.0.0.1";
     constexpr const char *GATEWAY_PORT = "3000";

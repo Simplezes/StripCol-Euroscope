@@ -170,6 +170,7 @@
     <ClInclude Include="src\network\WebSocketClient.h" />
     <ClInclude Include="src\network\WebSocketFrame.h" />
     <ClInclude Include="src\pch.h" />
+    <ClInclude Include="src\plugin\ClearanceScreen.h" />
     <ClInclude Include="src\plugin\StripCol.h" />
     <ClInclude Include="src\sync\AircraftTracker.h" />
     <ClInclude Include="src\sync\AtcListSync.h" />
@@ -189,6 +190,7 @@
     <ClCompile Include="src\network\GatewayDiscovery.cpp" />
     <ClCompile Include="src\network\WebSocketClient.cpp" />
     <ClCompile Include="src\network\WebSocketFrame.cpp" />
+    <ClCompile Include="src\plugin\ClearanceScreen.cpp" />
     <ClCompile Include="src\plugin\Commands.cpp" />
     <ClCompile Include="src\plugin\EntryPoint.cpp" />
     <ClCompile Include="src\plugin\StripCol.cpp" />

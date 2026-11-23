@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "plugin/StripCol.h"
 #include "common/Constants.h"
+#include "common/Log.h"
 #include "common/ModulePath.h"
 #include "common/Text.h"
 #include "sector/SectorFileLocator.h"
@@ -20,6 +21,8 @@ bool StripCol::OnCompileCommand(const char *sCommandLine)
         RunSectorFileCommand(argument);
     else if (command == ".stripcode")
         RunPairingCodeCommand();
+    else if (command == ".stripdev")
+        RunDebugConsoleCommand();
     else
         return false;
 
@@ -75,6 +78,21 @@ void StripCol::RunSectorFileCommand(const std::string &argument)
     LoadSectorData();
     SendSectorData();
     Notify("Sector", sectorMessage_.empty() ? "Could not read procedures from: " + argument : "Loaded sector file: " + argument);
+}
+
+void StripCol::RunDebugConsoleCommand()
+{
+    Log::ToggleConsole();
+    if (!Log::IsConsoleOpen())
+    {
+        Notify("System", "Debug console closed.");
+        return;
+    }
+
+    Notify("System", "Debug console opened.");
+    Log::Write("Debug console opened");
+    Log::Write(std::string("Gateway connected: ") + (link_.IsConnected() ? "yes" : "no"));
+    Log::Write("Radar screens registered: " + std::to_string(screens_.size()));
 }
 
 void StripCol::RunPairingCodeCommand()

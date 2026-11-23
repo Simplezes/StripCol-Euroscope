@@ -11,6 +11,7 @@ namespace AircraftCommands
     void SetAssignedSpeed(CommandContext &context, const nlohmann::json &message);
     void SetAssignedMach(CommandContext &context, const nlohmann::json &message);
     void SetSquawk(CommandContext &context, const nlohmann::json &message);
+    void SetClearance(CommandContext &context, const nlohmann::json &message);
     void SetDepartureTime(CommandContext &context, const nlohmann::json &message);
     void SetDirectPoint(CommandContext &context, const nlohmann::json &message);
     void SetSid(CommandContext &context, const nlohmann::json &message);

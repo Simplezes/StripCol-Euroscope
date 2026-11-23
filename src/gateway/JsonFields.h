@@ -10,4 +10,5 @@ namespace JsonFields
     std::string String(const nlohmann::json &message, const char *key);
     std::optional<double> Number(const nlohmann::json &message, const char *key);
     std::optional<int> Integer(const nlohmann::json &message, const char *key);
+    std::optional<bool> Boolean(const nlohmann::json &message, const char *key);
 }

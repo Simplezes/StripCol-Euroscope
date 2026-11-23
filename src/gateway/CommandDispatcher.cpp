@@ -25,6 +25,7 @@ namespace
             {"set-assigned-speed", AircraftCommands::SetAssignedSpeed},
             {"set-assigned-mach", AircraftCommands::SetAssignedMach},
             {"set-squawk", AircraftCommands::SetSquawk},
+            {"set-clearance", AircraftCommands::SetClearance},
             {"set-departureTime", AircraftCommands::SetDepartureTime},
             {"set-direct-point", AircraftCommands::SetDirectPoint},
             {"set-sid", AircraftCommands::SetSid},
@@ -47,7 +48,10 @@ namespace CommandDispatcher
         const std::string type = JsonFields::String(message, "type");
         auto handler = Handlers().find(type);
         if (handler == Handlers().end())
+        {
+            Log::Write("Unhandled gateway message type: " + type);
             return;
+        }
 
         try
         {
