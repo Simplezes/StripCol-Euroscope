@@ -9,10 +9,9 @@ EuroScope plugin that syncs your ATC session in real time over WebSocket. It con
 
 | Command | What it does |
 |---|---|
-| `.stripset <IP>` | Point the plugin at a different gateway (defaults to `127.0.0.1`). |
+| `.stripset <IP>` | Pin the plugin to a specific gateway. Without an IP it goes back to automatic discovery (tries `127.0.0.1`, then finds the gateway on every network adapter, including VPN and Hamachi). |
 | `.striprestart` | Reconnect to the gateway. |
 | `.stripcode` | Show your current pairing code. |
-| `.stripsquawk` | Turn the Squawk Assignment feature on or off. |
 
 ---
 

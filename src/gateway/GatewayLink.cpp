@@ -32,7 +32,7 @@ void GatewayLink::Open(EuroScopePlugIn::CController myself, bool newPairingCode)
 
     registeredCallsign_ = FromCString(myself.GetCallsign());
     registration_ = BuildRegistration(myself);
-    client_.Connect(host_, StripColConstants::GATEWAY_PORT, registration_);
+    client_.Connect(host_, StripColConstants::GATEWAY_PORT, registration_, discover_);
 }
 
 void GatewayLink::Close()
@@ -54,11 +54,12 @@ void GatewayLink::RefreshRegistration(EuroScopePlugIn::CController myself)
     client_.Send(registration_);
 }
 
-void GatewayLink::SetHost(const std::string &host)
+void GatewayLink::SetHost(const std::string &host, bool discover)
 {
     host_ = host;
+    discover_ = discover;
     if (IsOpen())
-        client_.Connect(host_, StripColConstants::GATEWAY_PORT, registration_);
+        client_.Connect(host_, StripColConstants::GATEWAY_PORT, registration_, discover_);
 }
 
 bool GatewayLink::Send(const std::string &message)

@@ -69,6 +69,9 @@
     <ClInclude Include="src\gateway\Messages.h">
       <Filter>src\gateway</Filter>
     </ClInclude>
+    <ClInclude Include="src\network\GatewayDiscovery.h">
+      <Filter>src\network</Filter>
+    </ClInclude>
     <ClInclude Include="src\network\WebSocketClient.h">
       <Filter>src\network</Filter>
     </ClInclude>
@@ -128,6 +131,9 @@
     <ClCompile Include="src\gateway\Messages.cpp">
       <Filter>src\gateway</Filter>
     </ClCompile>
+    <ClCompile Include="src\network\GatewayDiscovery.cpp">
+      <Filter>src\network</Filter>
+    </ClCompile>
     <ClCompile Include="src\network\WebSocketClient.cpp">
       <Filter>src\network</Filter>
     </ClCompile>
@@ -138,9 +144,6 @@
       <Filter>src\plugin</Filter>
     </ClCompile>
     <ClCompile Include="src\plugin\EntryPoint.cpp">
-      <Filter>src\plugin</Filter>
-    </ClCompile>
-    <ClCompile Include="src\plugin\SquawkTag.cpp">
       <Filter>src\plugin</Filter>
     </ClCompile>
     <ClCompile Include="src\plugin\StripCol.cpp">

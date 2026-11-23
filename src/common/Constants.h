@@ -9,6 +9,10 @@ namespace StripColConstants
 
     constexpr const char *DEFAULT_GATEWAY = "127.0.0.1";
     constexpr const char *GATEWAY_PORT = "3000";
+    constexpr unsigned short DISCOVERY_PORT = 3001;
+    constexpr int DISCOVERY_WAIT_MS = 800;
+    constexpr const char *DISCOVERY_REQUEST = "STRIPCOL_DISCOVER";
+    constexpr const char *DISCOVERY_REPLY = "STRIPCOL_GATEWAY";
     constexpr const char *PROCEDURES_FILE = "data\\procedures.json";
     constexpr const char *SECTOR_PATH_FILE = "data\\sector-path.txt";
 

@@ -166,6 +166,7 @@
     <ClInclude Include="src\gateway\GatewayLink.h" />
     <ClInclude Include="src\gateway\JsonFields.h" />
     <ClInclude Include="src\gateway\Messages.h" />
+    <ClInclude Include="src\network\GatewayDiscovery.h" />
     <ClInclude Include="src\network\WebSocketClient.h" />
     <ClInclude Include="src\network\WebSocketFrame.h" />
     <ClInclude Include="src\pch.h" />
@@ -185,11 +186,11 @@
     <ClCompile Include="src\gateway\GatewayLink.cpp" />
     <ClCompile Include="src\gateway\JsonFields.cpp" />
     <ClCompile Include="src\gateway\Messages.cpp" />
+    <ClCompile Include="src\network\GatewayDiscovery.cpp" />
     <ClCompile Include="src\network\WebSocketClient.cpp" />
     <ClCompile Include="src\network\WebSocketFrame.cpp" />
     <ClCompile Include="src\plugin\Commands.cpp" />
     <ClCompile Include="src\plugin\EntryPoint.cpp" />
-    <ClCompile Include="src\plugin\SquawkTag.cpp" />
     <ClCompile Include="src\plugin\StripCol.cpp" />
     <ClCompile Include="src\sector\SectorFileLocator.cpp" />
     <ClCompile Include="src\sector\SectorParser.cpp" />

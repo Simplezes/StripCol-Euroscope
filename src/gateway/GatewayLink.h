@@ -13,7 +13,7 @@ public:
     void Open(EuroScopePlugIn::CController myself, bool newPairingCode);
     void Close();
     void RefreshRegistration(EuroScopePlugIn::CController myself);
-    void SetHost(const std::string &host);
+    void SetHost(const std::string &host, bool discover);
 
     bool IsOpen() const { return !registeredCallsign_.empty(); }
     bool IsConnected() const { return client_.IsConnected(); }
@@ -30,6 +30,7 @@ private:
 
     WebSocketClient client_;
     std::string host_;
+    bool discover_ = true;
     std::string pairingCode_;
     std::string registeredCallsign_;
     std::string registration_;

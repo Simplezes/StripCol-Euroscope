@@ -26,9 +26,6 @@ StripCol::StripCol()
         Log::Write("Could not load " + proceduresPath);
 
     LoadSectorData();
-
-    RegisterTagItemType("Squawk Assignment", TAG_ITEM_SQUAWK);
-    RegisterTagItemFunction("Assign Squawk", TAG_FUNC_ASSIGN_SQUAWK);
 }
 
 void StripCol::Notify(const char *category, const std::string &text)

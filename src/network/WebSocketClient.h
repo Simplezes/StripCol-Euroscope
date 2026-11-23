@@ -19,7 +19,7 @@ public:
     WebSocketClient(const WebSocketClient &) = delete;
     WebSocketClient &operator=(const WebSocketClient &) = delete;
 
-    void Connect(const std::string &host, const std::string &port, const std::string &greeting);
+    void Connect(const std::string &host, const std::string &port, const std::string &greeting, bool discover);
     void SetGreeting(const std::string &greeting);
     void Disconnect();
 
@@ -36,6 +36,7 @@ private:
         std::string host;
         std::string port;
         std::string greeting;
+        bool discover = false;
         bool active = false;
         unsigned generation = 0;
     };
@@ -65,6 +66,7 @@ private:
 
     void ThreadMain();
     bool RunConnection(const Target &target);
+    void SwitchToDiscoveredHost(const Target &target);
     bool OpenSocket(const Target &target, Link &link);
     bool ConnectAddress(const addrinfo &address, Link &link);
     bool Handshake(const Target &target, Link &link);

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "network/WebSocketClient.h"
+#include "network/GatewayDiscovery.h"
 #include "common/Constants.h"
 #include "common/Log.h"
 #include <algorithm>
@@ -103,13 +104,14 @@ WebSocketClient::~WebSocketClient()
         WSACleanup();
 }
 
-void WebSocketClient::Connect(const std::string &host, const std::string &port, const std::string &greeting)
+void WebSocketClient::Connect(const std::string &host, const std::string &port, const std::string &greeting, bool discover)
 {
     {
         std::lock_guard<std::mutex> lock(mutex_);
         target_.host = host;
         target_.port = port;
         target_.greeting = greeting;
+        target_.discover = discover;
         target_.active = true;
         target_.generation = ++generation_;
         outbound_.clear();
@@ -216,9 +218,23 @@ void WebSocketClient::ThreadMain()
             continue;
         }
 
+        if (!opened && target.discover)
+            SwitchToDiscoveredHost(target);
+
         WaitWake(delayMs);
         delayMs = opened ? RECONNECT_DELAY_MIN_MS : std::min<unsigned>(delayMs * 2, RECONNECT_DELAY_MAX_MS);
     }
+}
+
+void WebSocketClient::SwitchToDiscoveredHost(const Target &target)
+{
+    const std::string host = GatewayDiscovery::Find();
+    if (host.empty() || host == target.host)
+        return;
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!Aborted(target.generation))
+        target_.host = host;
 }
 
 bool WebSocketClient::RunConnection(const Target &target)
