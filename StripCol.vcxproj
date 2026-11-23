@@ -151,35 +151,52 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="src\common\Constants.h" />
-    <ClInclude Include="src\common\Utils.h" />
-    <ClInclude Include="src\flightplan\FlightPlanManager.h" />
+    <ClInclude Include="src\common\Log.h" />
+    <ClInclude Include="src\common\ModulePath.h" />
+    <ClInclude Include="src\common\Text.h" />
+    <ClInclude Include="src\flightplan\AircraftSerializer.h" />
+    <ClInclude Include="src\flightplan\ProcedureCatalog.h" />
+    <ClInclude Include="src\flightplan\RouteEditor.h" />
     <ClInclude Include="src\framework.h" />
-    <ClInclude Include="src\network\HttpClient.h" />
+    <ClInclude Include="src\gateway\AircraftCommands.h" />
+    <ClInclude Include="src\gateway\CommandContext.h" />
+    <ClInclude Include="src\gateway\CommandDispatcher.h" />
+    <ClInclude Include="src\gateway\GatewayLink.h" />
+    <ClInclude Include="src\gateway\JsonFields.h" />
+    <ClInclude Include="src\gateway\Messages.h" />
     <ClInclude Include="src\network\WebSocketClient.h" />
+    <ClInclude Include="src\network\WebSocketFrame.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\plugin\StripCol.h" />
+    <ClInclude Include="src\sync\AircraftTracker.h" />
+    <ClInclude Include="src\sync\AtcListSync.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\common\Utils.cpp" />
-    <ClCompile Include="src\flightplan\FlightPlanManager.cpp" />
+    <ClCompile Include="src\common\Log.cpp" />
+    <ClCompile Include="src\common\ModulePath.cpp" />
+    <ClCompile Include="src\common\Text.cpp" />
+    <ClCompile Include="src\flightplan\AircraftSerializer.cpp" />
+    <ClCompile Include="src\flightplan\ProcedureCatalog.cpp" />
+    <ClCompile Include="src\flightplan\RouteEditor.cpp" />
     <ClCompile Include="src\gateway\AircraftCommands.cpp" />
     <ClCompile Include="src\gateway\CommandDispatcher.cpp" />
-    <ClCompile Include="src\gateway\GatewayConnection.cpp" />
-    <ClCompile Include="src\network\HttpClient.cpp" />
+    <ClCompile Include="src\gateway\GatewayLink.cpp" />
+    <ClCompile Include="src\gateway\JsonFields.cpp" />
+    <ClCompile Include="src\gateway\Messages.cpp" />
     <ClCompile Include="src\network\WebSocketClient.cpp" />
+    <ClCompile Include="src\network\WebSocketFrame.cpp" />
+    <ClCompile Include="src\plugin\Commands.cpp" />
+    <ClCompile Include="src\plugin\EntryPoint.cpp" />
+    <ClCompile Include="src\plugin\SquawkTag.cpp" />
+    <ClCompile Include="src\plugin\StripCol.cpp" />
+    <ClCompile Include="src\sync\AircraftTracker.cpp" />
+    <ClCompile Include="src\sync\AtcListSync.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="src\plugin\Commands.cpp" />
-    <ClCompile Include="src\plugin\DllMain.cpp" />
-    <ClCompile Include="src\plugin\EntryPoint.cpp" />
-    <ClCompile Include="src\plugin\SquawkTag.cpp" />
-    <ClCompile Include="src\plugin\StripCol.cpp" />
-    <ClCompile Include="src\sync\AircraftSync.cpp" />
-    <ClCompile Include="src\sync\AtcList.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

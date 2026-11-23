@@ -1,74 +1,64 @@
 #include "pch.h"
 #include "plugin/StripCol.h"
-#include "common/Utils.h"
-#include <algorithm>
-
-using namespace EuroScopePlugIn;
+#include "common/Constants.h"
+#include "common/Text.h"
 
 bool StripCol::OnCompileCommand(const char *sCommandLine)
 {
-    std::string cmd = sCommandLine;
-    std::transform(cmd.begin(), cmd.end(), cmd.begin(), ::tolower);
+    const std::string line = Text::Trim(Text::FromCString(sCommandLine));
+    const size_t split = line.find_first_of(" \t");
+    const std::string command = Text::ToLower(line.substr(0, split));
+    const std::string argument = split == std::string::npos ? std::string() : Text::Trim(line.substr(split));
 
-    if (cmd.find(".stripsquawk") == 0)
+    if (command == ".stripsquawk")
+        RunToggleSquawkCommand();
+    else if (command == ".striprestart")
+        RunRestartCommand();
+    else if (command == ".stripset")
+        RunSetGatewayCommand(argument);
+    else if (command == ".stripcode")
+        RunPairingCodeCommand();
+    else
+        return false;
+
+    return true;
+}
+
+void StripCol::RunToggleSquawkCommand()
+{
+    squawkAssignmentEnabled_ = !squawkAssignmentEnabled_;
+    Notify("System", std::string("Squawk Assignment feature ") + (squawkAssignmentEnabled_ ? "enabled." : "disabled."));
+}
+
+void StripCol::RunRestartCommand()
+{
+    if (!ControllerMyself().IsValid())
     {
-        enableSquawkAssignment = !enableSquawkAssignment;
-        std::string state = enableSquawkAssignment ? "enabled" : "disabled";
-        DisplayUserMessage("StripCol", "System", ("Squawk Assignment feature " + state + ".").c_str(), true, true, false, false, false);
-        return true;
+        Notify("System", "Connect as a controller before restarting the gateway connection.");
+        return;
     }
 
-    if (cmd.find(".striprestart") == 0)
+    StartSession(true);
+    Notify("System", "Gateway connection restarted.");
+}
+
+void StripCol::RunSetGatewayCommand(const std::string &argument)
+{
+    const std::string host = argument.empty() ? std::string(StripColConstants::DEFAULT_GATEWAY) : argument;
+    if (!Text::IsValidHostname(host))
     {
-        Utils::LogMessage("Manual restart triggered via command.");
-        DisconnectFromGateway();
-        {
-            std::lock_guard<std::mutex> lock(codeMutex);
-            pairingCode.clear();
-            registeredCallsign.clear();
-        }
-        ConnectToGateway();
-        DisplayUserMessage("StripCol", "System", "Gateway connection restarted.", true, true, false, false, false);
-        return true;
+        Notify("Gateway", "Invalid gateway address: " + host);
+        return;
     }
 
-    if (cmd.find(".stripset") == 0)
-    {
-        std::string original = sCommandLine;
-        size_t spacePos = original.find(' ');
-        std::string newAddr = (spacePos == std::string::npos) ? "127.0.0.1" : original.substr(spacePos + 1);
-        newAddr.erase(0, newAddr.find_first_not_of(" \t\r\n"));
-        newAddr.erase(newAddr.find_last_not_of(" \t\r\n") + 1);
-        if (newAddr.empty())
-            newAddr = "127.0.0.1";
+    link_.SetHost(host);
+    Notify("Gateway", "Gateway set to: " + host);
+}
 
-        {
-            std::lock_guard<std::mutex> lock(gatewayMutex);
-            gatewayAddress = newAddr;
-            wsClient->UpdateAddress(newAddr);
-        }
-
-        std::string msg = "Gateway set to: " + newAddr;
-        DisplayUserMessage("StripCol", "Gateway", msg.c_str(), true, true, false, false, false);
-        DisconnectFromGateway();
-        ConnectToGateway();
-        return true;
-    }
-
-    if (cmd.find(".stripcode") == 0)
-    {
-        std::lock_guard<std::mutex> lock(codeMutex);
-        if (!pairingCode.empty())
-        {
-            std::string msg = "Current Pairing Code: " + pairingCode;
-            DisplayUserMessage("StripCol", "System", msg.c_str(), true, true, false, false, false);
-        }
-        else
-        {
-            DisplayUserMessage("StripCol", "System", "No pairing code generated yet.", true, true, false, false, false);
-        }
-        return true;
-    }
-
-    return false;
+void StripCol::RunPairingCodeCommand()
+{
+    if (link_.PairingCode().empty())
+        Notify("System", "No pairing code generated yet.");
+    else
+        Notify("System", "Current Pairing Code: " + link_.PairingCode());
 }

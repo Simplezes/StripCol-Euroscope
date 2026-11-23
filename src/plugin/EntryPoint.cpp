@@ -1,18 +1,19 @@
 #include "pch.h"
 #include "plugin/StripCol.h"
 
-using namespace EuroScopePlugIn;
-
-static StripCol *g_pPlugin = nullptr;
-
-void EuroScopePlugInInit(CPlugIn **ppPlugInInstance)
+namespace
 {
-    g_pPlugin = new StripCol();
-    *ppPlugInInstance = g_pPlugin;
+    StripCol *g_plugin = nullptr;
+}
+
+void EuroScopePlugInInit(EuroScopePlugIn::CPlugIn **ppPlugInInstance)
+{
+    g_plugin = new StripCol();
+    *ppPlugInInstance = g_plugin;
 }
 
 void EuroScopePlugInExit()
 {
-    delete g_pPlugin;
-    g_pPlugin = nullptr;
+    delete g_plugin;
+    g_plugin = nullptr;
 }

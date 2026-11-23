@@ -1,139 +1,117 @@
 #include "pch.h"
 #include "plugin/StripCol.h"
-#include "flightplan/FlightPlanManager.h"
-#include "common/Utils.h"
 #include "common/Constants.h"
-#include "network/WebSocketClient.h"
+#include "common/Log.h"
+#include "common/ModulePath.h"
+#include "common/Text.h"
+#include "gateway/CommandContext.h"
+#include "gateway/CommandDispatcher.h"
+#include <cstring>
 
 using namespace EuroScopePlugIn;
 
 StripCol::StripCol()
-    : CPlugIn(EuroScopePlugIn::COMPATIBILITY_CODE,
-              StripColConstants::PLUGIN_NAME.c_str(),
-              StripColConstants::PLUGIN_VERSION.c_str(),
-              StripColConstants::PLUGIN_AUTHOR.c_str(),
-              StripColConstants::PLUGIN_COPYRIGHT.c_str())
+    : CPlugIn(COMPATIBILITY_CODE,
+              StripColConstants::PLUGIN_NAME,
+              StripColConstants::PLUGIN_VERSION,
+              StripColConstants::PLUGIN_AUTHOR,
+              StripColConstants::PLUGIN_COPYRIGHT),
+      tracker_(*this, link_, catalog_),
+      atcList_(*this, link_)
 {
-    wsClient = std::make_unique<WebSocketClient>(gatewayAddress, "3000",
-                                                 [this](const std::string &msg)
-                                                 { this->HandleWebSocketMessage(msg); });
+    const std::string proceduresPath = ModulePath::Directory() + "\\" + StripColConstants::PROCEDURES_FILE;
+    if (!catalog_.Load(proceduresPath))
+        Log::Write("Could not load " + proceduresPath);
 
-    if (WebSocketClient::CheckAvailability(gatewayAddress, "3000"))
-    {
-        Utils::LogMessage("Gateway available at " + gatewayAddress);
-    }
-    else
-    {
-        Utils::LogMessage("Gateway not available - will retry on position connect");
-    }
-
-    if (FlightPlanManager::LoadProcedures("data/procedures.json"))
-    {
-        Utils::LogMessage("Procedures configuration loaded successfully.");
-    }
-    else
-    {
-        Utils::LogMessage("Failed to load data/procedures.json configuration.");
-    }
-
-    if (enableSquawkAssignment)
-    {
-        RegisterTagItemType("Squawk Assignment", TAG_ITEM_SQUAWK);
-        RegisterTagItemFunction("Assign Squawk", TAG_FUNC_ASSIGN_SQUAWK);
-    }
+    RegisterTagItemType("Squawk Assignment", TAG_ITEM_SQUAWK);
+    RegisterTagItemFunction("Assign Squawk", TAG_FUNC_ASSIGN_SQUAWK);
 }
 
-StripCol::~StripCol()
+void StripCol::Notify(const char *category, const std::string &text)
 {
-    DisconnectFromGateway();
+    DisplayUserMessage("StripCol", category, text.c_str(), true, true, false, false, false);
+}
+
+void StripCol::StartSession(bool newPairingCode)
+{
+    CController myself = ControllerMyself();
+    if (!myself.IsValid())
+        return;
+
+    const std::string previousCode = link_.PairingCode();
+    link_.Open(myself, newPairingCode);
+    tracker_.Clear();
+    atcList_.Invalidate();
+
+    if (link_.PairingCode() != previousCode)
+        Notify("Pairing", "StripCol Pairing Code: " + link_.PairingCode());
+}
+
+void StripCol::StopSession()
+{
+    link_.Close();
+    tracker_.Clear();
+    atcList_.Invalidate();
 }
 
 void StripCol::OnControllerPositionUpdate(CController Controller)
 {
     CController myself = ControllerMyself();
-    if (!myself.IsValid() || std::string(Controller.GetCallsign()) != std::string(myself.GetCallsign()))
+    if (!myself.IsValid() || std::strcmp(Controller.GetCallsign(), myself.GetCallsign()) != 0)
         return;
 
-    if (wsClient->IsRunning())
-    {
-        std::string currentRegistered;
-        {
-            std::lock_guard<std::mutex> lock(codeMutex);
-            currentRegistered = registeredCallsign;
-        }
-        if (currentRegistered == std::string(myself.GetCallsign()))
-            return;
-
-        DisconnectFromGateway();
-        {
-            std::lock_guard<std::mutex> lock(codeMutex);
-            pairingCode.clear();
-            registeredCallsign.clear();
-        }
-        std::lock_guard<std::mutex> lock(aircraftMutex);
-        assumedAircraft.clear();
-        lastAircraftData.clear();
-    }
-
-    connectionRequested = true;
-}
-
-void StripCol::OnTimer(int Counter)
-{
-    if (connectionRequested && !wsClient->IsRunning())
-    {
-        connectionRequested = false;
-        ConnectToGateway();
-    }
-
-    ProcessPendingTasks();
-    CheckAllFlightPlans();
-
-    {
-        std::unordered_set<std::string> toProcess;
-        {
-            std::lock_guard<std::mutex> lock(dirtyMutex);
-            if (!dirtyAircraft.empty())
-            {
-                toProcess.swap(dirtyAircraft);
-            }
-        }
-
-        for (const auto &callsign : toProcess)
-        {
-            CFlightPlan fp = FlightPlanSelect(callsign.c_str());
-            if (fp.IsValid())
-            {
-                int state = fp.GetState();
-                HandleTransferState(fp, callsign, state);
-                HandleAssumedState(fp, callsign, state);
-            }
-        }
-    }
-
-    if (Counter % StripColConstants::ATCLIST_SYNC_INTERVAL_TICKS == 0)
-    {
-        SendAtcList();
-    }
+    if (link_.RegisteredCallsign() == myself.GetCallsign())
+        link_.RefreshRegistration(myself);
+    else
+        StartSession(true);
 }
 
 void StripCol::OnControllerDisconnect(CController Controller)
 {
-    std::string dcCallsign = Controller.GetCallsign();
+    if (link_.IsOpen() && link_.RegisteredCallsign() == Controller.GetCallsign())
     {
-        std::lock_guard<std::mutex> lock(codeMutex);
-        if (dcCallsign != registeredCallsign)
-            return;
+        Log::Write("Own position disconnected, closing the gateway session");
+        StopSession();
     }
+}
 
-    Utils::LogMessage("My position disconnected, stopping plugin...");
-    DisconnectFromGateway();
+void StripCol::OnFlightPlanFlightPlanDataUpdate(CFlightPlan FlightPlan)
+{
+    if (FlightPlan.IsValid())
+        tracker_.MarkDirty(FlightPlan.GetCallsign());
+}
+
+void StripCol::OnFlightPlanControllerAssignedDataUpdate(CFlightPlan FlightPlan, int)
+{
+    if (FlightPlan.IsValid())
+        tracker_.MarkDirty(FlightPlan.GetCallsign());
+}
+
+void StripCol::OnFlightPlanDisconnect(CFlightPlan FlightPlan)
+{
+    if (FlightPlan.IsValid())
+        tracker_.Release(FlightPlan.GetCallsign());
+}
+
+void StripCol::OnTimer(int Counter)
+{
+    try
     {
-        std::lock_guard<std::mutex> lock(codeMutex);
-        pairingCode.clear();
-        registeredCallsign.clear();
+        if (link_.TakeReconnected())
+        {
+            tracker_.Resync();
+            atcList_.Invalidate();
+        }
+
+        CommandContext context{*this, link_, tracker_, atcList_};
+        for (const std::string &message : link_.TakeInbound())
+            CommandDispatcher::Dispatch(context, message);
+
+        tracker_.Update(Counter);
+        atcList_.Update(Counter);
     }
-    std::lock_guard<std::mutex> lock(aircraftMutex);
-    assumedAircraft.clear();
-    lastAircraftData.clear();
+    catch (const std::exception &error)
+    {
+        Log::Write(std::string("Timer update failed: ") + error.what());
+    }
 }

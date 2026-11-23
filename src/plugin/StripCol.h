@@ -1,64 +1,28 @@
 #pragma once
 
 #include "EuroScopePlugIn.h"
-#include "network/WebSocketClient.h"
+#include "flightplan/ProcedureCatalog.h"
+#include "gateway/GatewayLink.h"
+#include "sync/AircraftTracker.h"
+#include "sync/AtcListSync.h"
 #include <string>
-#include <unordered_set>
-#include <unordered_map>
-#include <mutex>
-#include <queue>
-#include <atomic>
-#include <functional>
 
-const int TAG_ITEM_SQUAWK = 102;
-const int TAG_FUNC_ASSIGN_SQUAWK = 102;
+constexpr int TAG_ITEM_SQUAWK = 102;
+constexpr int TAG_FUNC_ASSIGN_SQUAWK = 102;
 
 class StripCol : public EuroScopePlugIn::CPlugIn
 {
-private:
-    std::unique_ptr<WebSocketClient> wsClient;
-    std::mutex gatewayMutex;
-    std::string gatewayAddress = "127.0.0.1";
-    std::atomic<bool> connectionRequested{false};
-
-    std::string pairingCode;
-    std::string registeredCallsign;
-    std::mutex codeMutex;
-
-    std::unordered_set<std::string> assumedAircraft;
-    std::unordered_map<std::string, std::string> lastAircraftData;
-    std::string lastAtcListJson;
-    std::mutex aircraftMutex;
-
-    std::unordered_set<std::string> transferToMeAircraft;
-    std::mutex transferMutex;
-
-    bool enableSquawkAssignment = true;
-
-    struct PendingTask
-    {
-        std::string type;
-        std::string json;
-    };
-    std::queue<PendingTask> taskQueue;
-    std::mutex queueMutex;
-
-    std::unordered_set<std::string> dirtyAircraft;
-    std::mutex dirtyMutex;
-
 public:
     StripCol();
-    virtual ~StripCol();
-
-    void GetPointTime(const std::string &callsign, const std::string &points, std::function<void(bool, const std::string &)> callback);
+    ~StripCol() override = default;
 
     void OnTimer(int Counter) override;
 
     void OnControllerPositionUpdate(EuroScopePlugIn::CController Controller) override;
     void OnControllerDisconnect(EuroScopePlugIn::CController Controller) override;
-    void OnFlightPlanFlightPlanDataUpdate(EuroScopePlugIn::CFlightPlan fp) override;
-    void OnFlightPlanControllerAssignedDataUpdate(EuroScopePlugIn::CFlightPlan fp, int DataType) override;
-    void OnFlightPlanDisconnect(EuroScopePlugIn::CFlightPlan fp) override;
+    void OnFlightPlanFlightPlanDataUpdate(EuroScopePlugIn::CFlightPlan FlightPlan) override;
+    void OnFlightPlanControllerAssignedDataUpdate(EuroScopePlugIn::CFlightPlan FlightPlan, int DataType) override;
+    void OnFlightPlanDisconnect(EuroScopePlugIn::CFlightPlan FlightPlan) override;
     bool OnCompileCommand(const char *sCommandLine) override;
 
     void OnGetTagItem(EuroScopePlugIn::CFlightPlan FlightPlan,
@@ -76,37 +40,18 @@ public:
                         RECT Area) override;
 
 private:
-    void ConnectToGateway();
-    void DisconnectFromGateway();
-    void HandleWebSocketMessage(const std::string &message);
-    void ProcessPendingTasks();
+    void StartSession(bool newPairingCode);
+    void StopSession();
+    void Notify(const char *category, const std::string &text);
 
-    void SendAtcList(bool force = false);
-    void CheckAllFlightPlans();
+    void RunSetGatewayCommand(const std::string &argument);
+    void RunRestartCommand();
+    void RunPairingCodeCommand();
+    void RunToggleSquawkCommand();
 
-    void HandleTransferState(EuroScopePlugIn::CFlightPlan &fp, const std::string &callsign, int state);
-    void HandleAssumedState(EuroScopePlugIn::CFlightPlan &fp, const std::string &callsign, int state);
-
-    void HandleSetClearedAltitude(const std::string &jsonStr);
-    void HandleSetAssignedHeading(const std::string &jsonStr);
-    void HandleSetAssignedSpeed(const std::string &jsonStr);
-    void HandleSetFinalAltitude(const std::string &jsonStr);
-    void HandleAcceptHandoff(const std::string &jsonStr);
-    void HandleEndTracking(const std::string &jsonStr);
-    void HandleSetSquawk(const std::string &jsonStr);
-    void HandleSetDepartureTime(const std::string &jsonStr);
-    void HandleSetDirectPoint(const std::string &jsonStr);
-    void HandleSetSid(const std::string &jsonStr);
-    void HandleSetStar(const std::string &jsonStr);
-    void HandleSetAssignedMach(const std::string &jsonStr);
-    void HandleRefuseHandoff(const std::string &jsonStr);
-    void HandleAtcTransfer(const std::string &jsonStr);
-    void HandleSync(const std::string &jsonStr);
-    void HandleAssumeAircraft(const std::string &jsonStr);
-    void HandleGetNearbyAircraft(const std::string &jsonStr);
-
-    std::string GetJsonValue(const std::string &jsonStr, const std::string &key);
-    EuroScopePlugIn::CFlightPlan SelectFlightPlan(const std::string &jsonStr);
-    void ApplyIntegerCommand(const std::string &jsonStr, const char *key,
-                             const std::function<void(EuroScopePlugIn::CFlightPlan &, int)> &apply);
+    ProcedureCatalog catalog_;
+    GatewayLink link_;
+    AircraftTracker tracker_;
+    AtcListSync atcList_;
+    bool squawkAssignmentEnabled_ = true;
 };

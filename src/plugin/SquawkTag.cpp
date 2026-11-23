@@ -1,77 +1,69 @@
 #include "pch.h"
 #include "plugin/StripCol.h"
-#include "common/Utils.h"
-#include <algorithm>
+#include "common/Log.h"
+#include "common/Text.h"
+#include <cstring>
 
 using namespace EuroScopePlugIn;
 
-void StripCol::OnGetTagItem(EuroScopePlugIn::CFlightPlan FlightPlan,
-                            EuroScopePlugIn::CRadarTarget RadarTarget,
+namespace
+{
+    constexpr COLORREF MISMATCH_COLOR = RGB(255, 165, 0);
+    constexpr const char *MISSING_SQUAWK_TEXT = "SQ?";
+}
+
+void StripCol::OnGetTagItem(CFlightPlan FlightPlan,
+                            CRadarTarget RadarTarget,
                             int ItemCode,
-                            int TagData,
+                            int,
                             char sItemString[16],
                             int *pColorCode,
                             COLORREF *pRGB,
-                            double *pFontSize)
+                            double *)
 {
-
-    if (!enableSquawkAssignment)
+    if (!squawkAssignmentEnabled_ || ItemCode != TAG_ITEM_SQUAWK || !FlightPlan.IsValid())
         return;
 
-    if (ItemCode == TAG_ITEM_SQUAWK)
+    const std::string assigned = Text::FromCString(FlightPlan.GetControllerAssignedData().GetSquawk());
+    if (assigned.empty())
     {
-        if (!FlightPlan.IsValid())
-            return;
+        strcpy_s(sItemString, 16, MISSING_SQUAWK_TEXT);
+        return;
+    }
 
-        const char *assr = FlightPlan.GetControllerAssignedData().GetSquawk();
-        const char *pssr = RadarTarget.IsValid() ? RadarTarget.GetPosition().GetSquawk() : "";
+    strcpy_s(sItemString, 16, assigned.c_str());
 
-        if (assr && strlen(assr) > 0)
-        {
-            strcpy_s(sItemString, 16, assr);
-            if (pssr && strlen(pssr) > 0 && strcmp(assr, pssr) != 0)
-            {
-                *pColorCode = EuroScopePlugIn::TAG_COLOR_RGB_DEFINED;
-                *pRGB = RGB(255, 165, 0);
-            }
-        }
-        else
-        {
-            strcpy_s(sItemString, 16, "SQ?");
-        }
+    if (!RadarTarget.IsValid())
+        return;
+
+    const char *transponder = RadarTarget.GetPosition().GetSquawk();
+    if (transponder && transponder[0] != '\0' && assigned != transponder)
+    {
+        *pColorCode = TAG_COLOR_RGB_DEFINED;
+        *pRGB = MISMATCH_COLOR;
     }
 }
 
-void StripCol::OnFunctionCall(int FunctionId,
-                              const char *sItemString,
-                              POINT Pt,
-                              RECT Area)
+void StripCol::OnFunctionCall(int FunctionId, const char *sItemString, POINT, RECT Area)
 {
-
-    if (!enableSquawkAssignment)
+    if (!squawkAssignmentEnabled_ || FunctionId != TAG_FUNC_ASSIGN_SQUAWK)
         return;
 
-    if (FunctionId == TAG_FUNC_ASSIGN_SQUAWK)
+    CFlightPlan flightPlan = FlightPlanSelectASEL();
+    if (!flightPlan.IsValid())
+        return;
+
+    const std::string entered = Text::FromCString(sItemString);
+    if (entered.empty())
     {
-        if (sItemString && strlen(sItemString) > 0)
-        {
-            CFlightPlan fp = FlightPlanSelectASEL();
-            if (fp.IsValid() && fp.GetState() == EuroScopePlugIn::FLIGHT_PLAN_STATE_ASSUMED)
-            {
-                std::string code = sItemString;
-                if (code.length() == 4 && std::all_of(code.begin(), code.end(), [](char c)
-                                                      { return c >= '0' && c <= '7'; }))
-                {
-                    fp.GetControllerAssignedData().SetSquawk(code.c_str());
-                    Utils::LogMessage("Manually assigned squawk " + code + " to " + fp.GetCallsign());
-                }
-            }
-        }
-        else
-        {
-            CFlightPlan fp = FlightPlanSelectASEL();
-            const char *current = fp.IsValid() ? fp.GetControllerAssignedData().GetSquawk() : "";
-            OpenPopupEdit(Area, FunctionId, current);
-        }
+        OpenPopupEdit(Area, FunctionId, flightPlan.GetControllerAssignedData().GetSquawk());
+        return;
     }
+
+    if (flightPlan.GetState() != FLIGHT_PLAN_STATE_ASSUMED || !Text::IsValidSquawk(entered))
+        return;
+
+    flightPlan.GetControllerAssignedData().SetSquawk(entered.c_str());
+    tracker_.MarkDirty(flightPlan.GetCallsign());
+    Log::Write("Squawk " + entered + " set on " + flightPlan.GetCallsign());
 }
