@@ -80,7 +80,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\ucrt;$(ProjectDir);$(ProjectDir)common;$(ProjectDir)logic;$(ProjectDir)network;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\ucrt;$(ProjectDir);$(ProjectDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -100,7 +100,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\ucrt;$(ProjectDir);$(ProjectDir)common;$(ProjectDir)logic;$(ProjectDir)network;$(ProjectDir)packages\Euroscope;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\ucrt;$(ProjectDir);$(ProjectDir)src;$(ProjectDir)packages\Euroscope;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -119,7 +119,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\ucrt;$(ProjectDir);$(ProjectDir)common;$(ProjectDir)logic;$(ProjectDir)network;$(ProjectDir)packages\Euroscope;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\ucrt;$(ProjectDir);$(ProjectDir)src;$(ProjectDir)packages\Euroscope;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -140,7 +140,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\ucrt;$(ProjectDir);$(ProjectDir)common;$(ProjectDir)logic;$(ProjectDir)network;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(WindowsSdkDir)Include\$(WindowsTargetPlatformVersion)\ucrt;$(ProjectDir);$(ProjectDir)src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -150,28 +150,36 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="framework.h" />
-    <ClInclude Include="pch.h" />
-    <ClInclude Include="common\Constants.h" />
-    <ClInclude Include="common\Utils.h" />
-    <ClInclude Include="network\WebSocketClient.h" />
-    <ClInclude Include="network\HttpClient.h" />
-    <ClInclude Include="logic\FlightPlanManager.h" />
-    <ClInclude Include="StripCol.h" />
+    <ClInclude Include="src\common\Constants.h" />
+    <ClInclude Include="src\common\Utils.h" />
+    <ClInclude Include="src\flightplan\FlightPlanManager.h" />
+    <ClInclude Include="src\framework.h" />
+    <ClInclude Include="src\network\HttpClient.h" />
+    <ClInclude Include="src\network\WebSocketClient.h" />
+    <ClInclude Include="src\pch.h" />
+    <ClInclude Include="src\plugin\StripCol.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="dllmain.cpp" />
-    <ClCompile Include="pch.cpp">
+    <ClCompile Include="src\common\Utils.cpp" />
+    <ClCompile Include="src\flightplan\FlightPlanManager.cpp" />
+    <ClCompile Include="src\gateway\AircraftCommands.cpp" />
+    <ClCompile Include="src\gateway\CommandDispatcher.cpp" />
+    <ClCompile Include="src\gateway\GatewayConnection.cpp" />
+    <ClCompile Include="src\network\HttpClient.cpp" />
+    <ClCompile Include="src\network\WebSocketClient.cpp" />
+    <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="stripcol.cpp" />
-    <ClCompile Include="common\Utils.cpp" />
-    <ClCompile Include="network\WebSocketClient.cpp" />
-    <ClCompile Include="network\HttpClient.cpp" />
-    <ClCompile Include="logic\FlightPlanManager.cpp" />
+    <ClCompile Include="src\plugin\Commands.cpp" />
+    <ClCompile Include="src\plugin\DllMain.cpp" />
+    <ClCompile Include="src\plugin\EntryPoint.cpp" />
+    <ClCompile Include="src\plugin\SquawkTag.cpp" />
+    <ClCompile Include="src\plugin\StripCol.cpp" />
+    <ClCompile Include="src\sync\AircraftSync.cpp" />
+    <ClCompile Include="src\sync\AtcList.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

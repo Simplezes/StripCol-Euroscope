@@ -1,7 +1,7 @@
 #pragma once
 
 #include "EuroScopePlugIn.h"
-#include "WebSocketClient.h"
+#include "network/WebSocketClient.h"
 #include <string>
 #include <unordered_set>
 #include <unordered_map>
@@ -80,7 +80,6 @@ private:
     void DisconnectFromGateway();
     void HandleWebSocketMessage(const std::string &message);
     void ProcessPendingTasks();
-    void SendRegistration();
 
     void SendAtcList(bool force = false);
     void CheckAllFlightPlans();
@@ -107,4 +106,7 @@ private:
     void HandleGetNearbyAircraft(const std::string &jsonStr);
 
     std::string GetJsonValue(const std::string &jsonStr, const std::string &key);
+    EuroScopePlugIn::CFlightPlan SelectFlightPlan(const std::string &jsonStr);
+    void ApplyIntegerCommand(const std::string &jsonStr, const char *key,
+                             const std::function<void(EuroScopePlugIn::CFlightPlan &, int)> &apply);
 };

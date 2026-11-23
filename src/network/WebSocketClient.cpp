@@ -1,7 +1,7 @@
 #include "pch.h"
-#include "WebSocketClient.h"
-#include "Utils.h"
-#include "../common/Constants.h"
+#include "network/WebSocketClient.h"
+#include "common/Utils.h"
+#include "common/Constants.h"
 #include <ws2tcpip.h>
 #include <sstream>
 #include <random>
@@ -309,8 +309,7 @@ void WebSocketClient::ReceiveMessages()
                         reinterpret_cast<unsigned char *>(buf),
                         reinterpret_cast<unsigned char *>(buf) + bytesRead);
 
-    // Guard against unbounded growth from malformed frames
-    const size_t MAX_RECV_BUFFER = 1 * 1024 * 1024; // 1 MB
+    const size_t MAX_RECV_BUFFER = 1 * 1024 * 1024;
     if (m_recvBuffer.size() > MAX_RECV_BUFFER)
     {
         Utils::LogMessage("Receive buffer exceeded 1 MB, dropping connection");
@@ -319,21 +318,18 @@ void WebSocketClient::ReceiveMessages()
         return;
     }
 
-    // Process all complete frames available in the buffer
     while (m_recvBuffer.size() >= 2)
     {
         unsigned char opcode = m_recvBuffer[0] & 0x0F;
         bool masked = (m_recvBuffer[1] & 0x80) != 0;
         size_t lenByte = m_recvBuffer[1] & 0x7F;
 
-        // Determine extended payload length size
         size_t extLenBytes = 0;
         if (lenByte == 126)
             extLenBytes = 2;
         else if (lenByte == 127)
             extLenBytes = 8;
 
-        // Wait for enough bytes to read extended length field
         if (m_recvBuffer.size() < 2 + extLenBytes)
             break;
 
@@ -353,25 +349,24 @@ void WebSocketClient::ReceiveMessages()
         size_t payloadStart = maskOffset + (masked ? 4 : 0);
         size_t totalLen = payloadStart + payloadLen;
 
-        // Wait until the full frame has arrived
         if (m_recvBuffer.size() < totalLen)
             break;
 
-        if (opcode == 0x08) // close
+        if (opcode == 0x08)
         {
             wsConnected = false;
             Utils::LogMessage("Connection closed by server");
             m_recvBuffer.erase(m_recvBuffer.begin(), m_recvBuffer.begin() + totalLen);
             return;
         }
-        else if (opcode == 0x09) // ping → send pong
+        else if (opcode == 0x09)
         {
             unsigned char pong[] = {0x8A, 0x80, 0x00, 0x00, 0x00, 0x00};
             std::lock_guard<std::mutex> lock(wsMutex);
             if (wsSocket != INVALID_SOCKET)
                 send(wsSocket, reinterpret_cast<const char *>(pong), sizeof(pong), 0);
         }
-        else if (opcode == 0x01 || opcode == 0x02) // text or binary
+        else if (opcode == 0x01 || opcode == 0x02)
         {
             std::string payload;
             payload.reserve(payloadLen);

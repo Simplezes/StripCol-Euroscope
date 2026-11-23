@@ -1,66 +1,97 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Source Files">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    <Filter Include="src">
+      <UniqueIdentifier>{34EF91A0-2E99-5173-B93B-60637269E146}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    <Filter Include="src\common">
+      <UniqueIdentifier>{AB5B098B-F949-5B5E-852C-0F4CD01CF1B3}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    <Filter Include="src\flightplan">
+      <UniqueIdentifier>{2421E70D-D4C3-5BC1-8D08-4099FD8B1192}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\gateway">
+      <UniqueIdentifier>{C3A8E667-1421-58BA-AE28-1951AECEA0A9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\network">
+      <UniqueIdentifier>{CCB3B168-EBE2-58B9-B3F5-E21588F58D5A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\plugin">
+      <UniqueIdentifier>{FF681FEB-5C81-50CB-9FDD-3520457F60A5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\sync">
+      <UniqueIdentifier>{763A7F3B-0C2F-57EF-955A-D77B48D8D0C5}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="framework.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="src\common\Constants.h">
+      <Filter>src\common</Filter>
     </ClInclude>
-    <ClInclude Include="pch.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="src\common\Utils.h">
+      <Filter>src\common</Filter>
     </ClInclude>
-    <ClInclude Include="common\Constants.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="src\flightplan\FlightPlanManager.h">
+      <Filter>src\flightplan</Filter>
     </ClInclude>
-    <ClInclude Include="common\Utils.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="src\framework.h">
+      <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="network\WebSocketClient.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="src\network\HttpClient.h">
+      <Filter>src\network</Filter>
     </ClInclude>
-    <ClInclude Include="network\HttpClient.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="src\network\WebSocketClient.h">
+      <Filter>src\network</Filter>
     </ClInclude>
-    <ClInclude Include="logic\FlightPlanManager.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="src\pch.h">
+      <Filter>src</Filter>
     </ClInclude>
-    <ClInclude Include="StripCol.h">
-      <Filter>Header Files</Filter>
+    <ClInclude Include="src\plugin\StripCol.h">
+      <Filter>src\plugin</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="dllmain.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="src\common\Utils.cpp">
+      <Filter>src\common</Filter>
     </ClCompile>
-    <ClCompile Include="pch.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="src\flightplan\FlightPlanManager.cpp">
+      <Filter>src\flightplan</Filter>
     </ClCompile>
-    <ClCompile Include="stripcol.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="src\gateway\AircraftCommands.cpp">
+      <Filter>src\gateway</Filter>
     </ClCompile>
-    <ClCompile Include="common\Utils.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="src\gateway\CommandDispatcher.cpp">
+      <Filter>src\gateway</Filter>
     </ClCompile>
-    <ClCompile Include="network\WebSocketClient.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="src\gateway\GatewayConnection.cpp">
+      <Filter>src\gateway</Filter>
     </ClCompile>
-    <ClCompile Include="network\HttpClient.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="src\network\HttpClient.cpp">
+      <Filter>src\network</Filter>
     </ClCompile>
-    <ClCompile Include="logic\FlightPlanManager.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="src\network\WebSocketClient.cpp">
+      <Filter>src\network</Filter>
+    </ClCompile>
+    <ClCompile Include="src\pch.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\plugin\Commands.cpp">
+      <Filter>src\plugin</Filter>
+    </ClCompile>
+    <ClCompile Include="src\plugin\DllMain.cpp">
+      <Filter>src\plugin</Filter>
+    </ClCompile>
+    <ClCompile Include="src\plugin\EntryPoint.cpp">
+      <Filter>src\plugin</Filter>
+    </ClCompile>
+    <ClCompile Include="src\plugin\SquawkTag.cpp">
+      <Filter>src\plugin</Filter>
+    </ClCompile>
+    <ClCompile Include="src\plugin\StripCol.cpp">
+      <Filter>src\plugin</Filter>
+    </ClCompile>
+    <ClCompile Include="src\sync\AircraftSync.cpp">
+      <Filter>src\sync</Filter>
+    </ClCompile>
+    <ClCompile Include="src\sync\AtcList.cpp">
+      <Filter>src\sync</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

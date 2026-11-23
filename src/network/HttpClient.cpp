@@ -1,9 +1,9 @@
 #include "pch.h"
-#include "HttpClient.h"
+#include "network/HttpClient.h"
 #include <vector>
 #include <mutex>
 #include <algorithm>
-#include "../common/Utils.h"
+#include "common/Utils.h"
 
 static std::mutex s_futuresMutex;
 static std::vector<std::future<void>> s_activeFutures;
