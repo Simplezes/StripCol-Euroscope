@@ -158,7 +158,9 @@
     <ClInclude Include="src\flightplan\ProcedureCatalog.h" />
     <ClInclude Include="src\flightplan\RouteEditor.h" />
     <ClInclude Include="src\framework.h" />
-    <ClInclude Include="src\gateway\AircraftCommands.h" />
+    <ClInclude Include="src\sector\SectorFileLocator.h" />
+    <ClInclude Include="src\sector\SectorParser.h" />
+<ClInclude Include="src\gateway\AircraftCommands.h" />
     <ClInclude Include="src\gateway\CommandContext.h" />
     <ClInclude Include="src\gateway\CommandDispatcher.h" />
     <ClInclude Include="src\gateway\GatewayLink.h" />
@@ -189,6 +191,8 @@
     <ClCompile Include="src\plugin\EntryPoint.cpp" />
     <ClCompile Include="src\plugin\SquawkTag.cpp" />
     <ClCompile Include="src\plugin\StripCol.cpp" />
+    <ClCompile Include="src\sector\SectorFileLocator.cpp" />
+    <ClCompile Include="src\sector\SectorParser.cpp" />
     <ClCompile Include="src\sync\AircraftTracker.cpp" />
     <ClCompile Include="src\sync\AtcListSync.cpp" />
     <ClCompile Include="src\pch.cpp">

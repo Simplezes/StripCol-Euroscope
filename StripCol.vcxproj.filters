@@ -19,6 +19,9 @@
     <Filter Include="src\plugin">
       <UniqueIdentifier>{ff681feb-5c81-50cb-9fdd-3520457f60a5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="src\sector">
+      <UniqueIdentifier>{5b0e4c1a-7d2f-4c8e-9a31-6f2d8e1b4a07}</UniqueIdentifier>
+    </Filter>
     <Filter Include="src\sync">
       <UniqueIdentifier>{763a7f3b-0c2f-57ef-955a-d77b48d8d0c5}</UniqueIdentifier>
     </Filter>
@@ -81,6 +84,12 @@
     <ClInclude Include="src\sync\AircraftTracker.h">
       <Filter>src\sync</Filter>
     </ClInclude>
+    <ClInclude Include="src\sector\SectorFileLocator.h">
+      <Filter>src\sector</Filter>
+    </ClInclude>
+    <ClInclude Include="src\sector\SectorParser.h">
+      <Filter>src\sector</Filter>
+    </ClInclude>
     <ClInclude Include="src\sync\AtcListSync.h">
       <Filter>src\sync</Filter>
     </ClInclude>
@@ -136,6 +145,12 @@
     </ClCompile>
     <ClCompile Include="src\plugin\StripCol.cpp">
       <Filter>src\plugin</Filter>
+    </ClCompile>
+    <ClCompile Include="src\sector\SectorFileLocator.cpp">
+      <Filter>src\sector</Filter>
+    </ClCompile>
+    <ClCompile Include="src\sector\SectorParser.cpp">
+      <Filter>src\sector</Filter>
     </ClCompile>
     <ClCompile Include="src\sync\AircraftTracker.cpp">
       <Filter>src\sync</Filter>
