@@ -5,4 +5,6 @@
 namespace Log
 {
     void Write(const std::string &message);
+    void ToggleConsole();
+    bool IsConsoleOpen();
 }
