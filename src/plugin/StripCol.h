@@ -23,6 +23,7 @@ public:
     void OnFlightPlanFlightPlanDataUpdate(EuroScopePlugIn::CFlightPlan FlightPlan) override;
     void OnFlightPlanControllerAssignedDataUpdate(EuroScopePlugIn::CFlightPlan FlightPlan, int DataType) override;
     void OnFlightPlanDisconnect(EuroScopePlugIn::CFlightPlan FlightPlan) override;
+    void OnNewMetarReceived(const char *sStation, const char *sFullMetar) override;
     bool OnCompileCommand(const char *sCommandLine) override;
     EuroScopePlugIn::CRadarScreen *OnRadarScreenCreated(const char *sDisplayName, bool NeedRadarContent,
                                                         bool GeoReferenced, bool CanBeSaved,

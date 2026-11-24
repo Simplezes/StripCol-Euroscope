@@ -23,6 +23,15 @@ namespace Messages
         return JsonFields::Dump(message);
     }
 
+    std::string Metar(const std::string &station, const std::string &metar)
+    {
+        nlohmann::json message;
+        message["type"] = "metar";
+        message["data"]["station"] = station;
+        message["data"]["metar"] = metar;
+        return JsonFields::Dump(message);
+    }
+
     std::string SectorDataMessage(const SectorData &data)
     {
         nlohmann::json message;

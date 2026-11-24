@@ -120,6 +120,12 @@ void StripCol::OnFlightPlanDisconnect(CFlightPlan FlightPlan)
         tracker_.Release(FlightPlan.GetCallsign());
 }
 
+void StripCol::OnNewMetarReceived(const char *sStation, const char *sFullMetar)
+{
+    if (link_.IsConnected())
+        link_.Send(Messages::Metar(Text::FromCString(sStation), Text::FromCString(sFullMetar)));
+}
+
 CRadarScreen *StripCol::OnRadarScreenCreated(const char *sDisplayName, bool, bool, bool, bool)
 {
     const bool isStandard = std::strcmp(sDisplayName, StripColConstants::STANDARD_SCREEN_NAME) == 0;
