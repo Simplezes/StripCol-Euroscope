@@ -78,6 +78,35 @@ namespace AircraftSerializer
             }
         }
 
+        std::string EstimateArrival(EuroScopePlugIn::CFlightPlanExtractedRoute &route, int minuteOfDay)
+        {
+            const int last = route.GetPointsNumber() - 1;
+            if (last < 0)
+                return "";
+
+            const int minutesAhead = route.GetPointDistanceInMinutes(last);
+            return minutesAhead >= 0 ? FormatEta(minuteOfDay, minutesAhead) : "";
+        }
+
+        json ReadRoutePoints(EuroScopePlugIn::CFlightPlanExtractedRoute &route, int minuteOfDay, const PassedTimes &passed)
+        {
+            json points = json::array();
+            const int count = route.GetPointsNumber();
+            for (int i = 0; i < count; i++)
+            {
+                const char *name = route.GetPointName(i);
+                if (!name || !name[0])
+                    continue;
+
+                const int minutesAhead = route.GetPointDistanceInMinutes(i);
+                auto found = passed.find(name);
+                points.push_back({{"name", std::string(name)},
+                                  {"eta", minutesAhead >= 0 ? FormatEta(minuteOfDay, minutesAhead) : ""},
+                                  {"ato", found != passed.end() ? found->second : ""}});
+            }
+            return points;
+        }
+
         std::string SingleCharacter(char value)
         {
             return std::string(1, value);
@@ -92,9 +121,15 @@ namespace AircraftSerializer
         }
     }
 
+    std::string FormatClock(std::time_t now)
+    {
+        return FormatEta(static_cast<int>((now / 60) % MINUTES_PER_DAY), 0);
+    }
+
     std::string Serialize(EuroScopePlugIn::CFlightPlan flightPlan,
                           const ProcedureCatalog &catalog,
-                          std::time_t now)
+                          std::time_t now,
+                          const PassedTimes &passed)
     {
         if (!flightPlan.IsValid())
             return "{}";
@@ -143,6 +178,7 @@ namespace AircraftSerializer
         aircraft["clearanceReceived"] = flightPlan.GetClearenceFlag();
         aircraft["departurePoints"] = std::move(departurePoints);
         aircraft["arrivalPoints"] = std::move(arrivalPoints);
+        aircraft["routePoints"] = ReadRoutePoints(route, minuteOfDay, passed);
         aircraft["clearedAltitude"] = assigned.GetClearedAltitude();
         aircraft["assignedHeading"] = assigned.GetAssignedHeading();
         aircraft["assignedMach"] = assigned.GetAssignedMach() / StripColConstants::MACH_SCALE;
@@ -161,6 +197,7 @@ namespace AircraftSerializer
         aircraft["alternate"] = FromCString(data.GetAlternate());
         aircraft["communicationType"] = SingleCharacter(data.GetCommunicationType());
         aircraft["estimatedDepartureTime"] = FromCString(data.GetEstimatedDepartureTime());
+        aircraft["estimatedArrival"] = EstimateArrival(route, minuteOfDay);
         aircraft["enrouteHours"] = FromCString(data.GetEnrouteHours());
         aircraft["enrouteMinutes"] = FromCString(data.GetEnrouteMinutes());
         aircraft["fuelHours"] = FromCString(data.GetFuelHours());

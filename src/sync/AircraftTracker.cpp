@@ -69,35 +69,55 @@ void AircraftTracker::Update(int tick)
     dirty_.clear();
 }
 
+void AircraftTracker::RecordPassedPoints(CFlightPlan &flightPlan, Tracked &tracked)
+{
+    CFlightPlanExtractedRoute route = flightPlan.GetExtractedRoute();
+    const int index = route.GetPointsCalculatedIndex();
+    if (index < 0)
+        return;
+
+    if (tracked.passedIndex >= 0 && index > tracked.passedIndex)
+    {
+        const std::string time = AircraftSerializer::FormatClock(now_);
+        for (int i = tracked.passedIndex + 1; i <= index; i++)
+        {
+            const char *name = route.GetPointName(i);
+            if (name && name[0])
+                tracked.passedTimes.emplace(name, time);
+        }
+    }
+    tracked.passedIndex = index;
+}
+
 void AircraftTracker::ProcessAssumed(CFlightPlan &flightPlan, const std::string &callsign, bool refresh)
 {
-    auto found = assumed_.find(callsign);
-    const bool isNew = found == assumed_.end();
-    if (!isNew)
-        found->second.seenStamp = stamp_;
+    Tracked &tracked = assumed_[callsign];
+    tracked.seenStamp = stamp_;
 
-    if (isNew || !found->second.announced)
+    const int passedBefore = tracked.passedIndex;
+    RecordPassedPoints(flightPlan, tracked);
+    const bool passedPoint = passedBefore >= 0 && tracked.passedIndex > passedBefore;
+
+    if (!tracked.announced)
     {
-        std::string data = AircraftSerializer::Serialize(flightPlan, catalog_, now_);
+        std::string data = AircraftSerializer::Serialize(flightPlan, catalog_, now_, tracked.passedTimes);
         if (!link_.Send(Messages::Envelope("aircraft", data)))
             return;
 
-        Tracked &tracked = assumed_[callsign];
         tracked.data = std::move(data);
         tracked.announced = true;
-        tracked.seenStamp = stamp_;
         return;
     }
 
-    if (!refresh)
+    if (!refresh && !passedPoint)
         return;
 
-    std::string data = AircraftSerializer::Serialize(flightPlan, catalog_, now_);
-    if (data == found->second.data)
+    std::string data = AircraftSerializer::Serialize(flightPlan, catalog_, now_, tracked.passedTimes);
+    if (data == tracked.data)
         return;
 
     if (link_.Send(Messages::Envelope("fpupdate", data)))
-        found->second.data = std::move(data);
+        tracked.data = std::move(data);
 }
 
 void AircraftTracker::ProcessTransfer(CFlightPlan &flightPlan, const std::string &callsign)
@@ -107,7 +127,7 @@ void AircraftTracker::ProcessTransfer(CFlightPlan &flightPlan, const std::string
     if (!inserted)
         return;
 
-    std::string data = AircraftSerializer::Serialize(flightPlan, catalog_, now_);
+    std::string data = AircraftSerializer::Serialize(flightPlan, catalog_, now_, {});
     if (!link_.Send(Messages::Envelope("transfer", data)))
         transferring_.erase(entry);
 }

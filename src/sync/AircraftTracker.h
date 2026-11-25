@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EuroScopePlugIn.h"
+#include "flightplan/AircraftSerializer.h"
 #include "flightplan/ProcedureCatalog.h"
 #include "gateway/GatewayLink.h"
 #include <string>
@@ -24,7 +25,11 @@ private:
         std::string data;
         bool announced = false;
         unsigned seenStamp = 0;
+        int passedIndex = -1;
+        AircraftSerializer::PassedTimes passedTimes;
     };
+
+    void RecordPassedPoints(EuroScopePlugIn::CFlightPlan &flightPlan, Tracked &tracked);
 
     void ProcessAssumed(EuroScopePlugIn::CFlightPlan &flightPlan, const std::string &callsign, bool refresh);
     void ProcessTransfer(EuroScopePlugIn::CFlightPlan &flightPlan, const std::string &callsign);
