@@ -38,6 +38,8 @@ namespace Messages
         message["type"] = "sector-data";
         message["data"]["procedures"] = data.procedures;
         message["data"]["sectors"] = data.sectors;
+        message["data"]["transfers"] = data.transfers;
+        message["data"]["positions"] = data.positions;
         return JsonFields::Dump(message);
     }
 

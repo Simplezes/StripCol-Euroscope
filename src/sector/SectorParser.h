@@ -7,6 +7,8 @@ struct SectorData
 {
     nlohmann::json procedures = nlohmann::json::object();
     nlohmann::json sectors = nlohmann::json::object();
+    nlohmann::json transfers = nlohmann::json::array();
+    nlohmann::json positions = nlohmann::json::array();
 
     bool HasProcedures() const { return !procedures.empty(); }
 };
