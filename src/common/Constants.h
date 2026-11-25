@@ -3,7 +3,7 @@
 namespace StripColConstants
 {
     constexpr const char *PLUGIN_NAME = "StripCol";
-    constexpr const char *PLUGIN_VERSION = "3.0";
+    constexpr const char *PLUGIN_VERSION = "3.2";
     constexpr const char *PLUGIN_AUTHOR = "Simplezes";
     constexpr const char *PLUGIN_COPYRIGHT = "Copyright 2026";
     constexpr const char *STANDARD_SCREEN_NAME = "Standard ES radar screen";
