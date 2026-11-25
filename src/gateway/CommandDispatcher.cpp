@@ -27,6 +27,7 @@ namespace
             {"set-squawk", AircraftCommands::SetSquawk},
             {"set-clearance", AircraftCommands::SetClearance},
             {"set-departureTime", AircraftCommands::SetDepartureTime},
+            {"set-eobt", AircraftCommands::SetEstimatedDepartureTime},
             {"set-direct-point", AircraftCommands::SetDirectPoint},
             {"set-sid", AircraftCommands::SetSid},
             {"set-star", AircraftCommands::SetStar}};

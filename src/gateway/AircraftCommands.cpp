@@ -136,6 +136,20 @@ namespace AircraftCommands
         context.tracker.MarkDirty(target.callsign);
     }
 
+    void SetEstimatedDepartureTime(CommandContext &context, const nlohmann::json &message)
+    {
+        Target target;
+        std::string departureTime = JsonFields::String(message, "eobt");
+        if (departureTime.empty() || !FindTarget(context, message, target))
+            return Reject("set-eobt", "missing flight or time");
+
+        EuroScopePlugIn::CFlightPlanData data = target.flightPlan.GetFlightPlanData();
+        if (!data.SetEstimatedDepartureTime(departureTime.c_str()) || !data.AmendFlightPlan())
+            return Reject("set-eobt", "EuroScope refused the new EOBT");
+
+        context.tracker.MarkDirty(target.callsign);
+    }
+
     void SetDirectPoint(CommandContext &context, const nlohmann::json &message)
     {
         Target target;
